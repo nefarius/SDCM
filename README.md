@@ -1,28 +1,40 @@
 # __Surface Dev Center Manager (SDCM)__
 
-Surface Dev Center Manager (SDCM) is a tool that utilizes the REST APIs made available by Microsoft Partner Center (a.k.a. Hardware Dev Center) to automate many common tasks for hardware development and maintenance around driver and firmware management.
+Surface Dev Center Manager (SDCM) is a tool that utilizes the REST APIs made available by Microsoft Partner Center (
+a.k.a. Hardware Dev Center) to automate many common tasks for hardware development and maintenance around driver and
+firmware management.
 
-**SDCM** enables you to create `Attestation` and `WHQL` products, submissions, download the resulting signed packages, and manage shipping labels to release software on Windows Update.
+**SDCM** enables you to create `Attestation` and `WHQL` products, submissions, download the resulting signed packages,
+and manage shipping labels to release software on Windows Update.
 
 > This tool is based on the
-[Hardware Dashboard API](https://docs.microsoft.com/en-us/windows-hardware/drivers/dashboard/dashboard-api). Detailed options are available with the `-?`, `-h` or `-help` option at the command line.
+[Hardware Dashboard API](https://docs.microsoft.com/en-us/windows-hardware/drivers/dashboard/dashboard-api). Detailed
+> options are available with the `-?`, `-h` or `-help` option at the command line.
 
 <br/>
 
 # Getting Started
+
 1. Clone the repo
-1. Follow the steps here to [setup your app](https://docs.microsoft.com/en-us/windows-hardware/drivers/dashboard/dashboard-api#associate-an-azure-ad-application-with-your-windows-dev-center-account) to get credentials
-1. Edit authconfig.json to the appropriate values after your app was set up
+2. Follow the steps here
+   to [setup your app](https://docs.microsoft.com/en-us/windows-hardware/drivers/dashboard/dashboard-api#associate-an-azure-ad-application-with-your-windows-dev-center-account)
+   to get credentials
+3. Edit authconfig.json to the appropriate values after your app was set up
     - Change clientId, tenantId and key to match the values from your app registration
     - You should not have to change the url or urlPrefix
-1. Build the project
+4. Build the project
 
 <br/>
 
 # Input Json Formats
-> Please refer to the [Hardware Dashboard API](https://docs.microsoft.com/en-us/windows-hardware/drivers/dashboard/dashboard-api) documentation for detailed information on each of the settings below.  This sample is targeted for a RS4 HLK submission and shipping label.
+
+> Please refer to
+> the [Hardware Dashboard API](https://docs.microsoft.com/en-us/windows-hardware/drivers/dashboard/dashboard-api)
+> documentation for detailed information on each of the settings below. This sample is targeted for a RS4 HLK submission
+> and shipping label.
 
 ## Creating a Product
+
 ```json
 {
     "createType": "product",
@@ -52,6 +64,7 @@ Surface Dev Center Manager (SDCM) is a tool that utilizes the REST APIs made ava
 <br/>
 
 ## Creating a Submission
+
 ```json
 {
     "createType": "submission",
@@ -65,6 +78,7 @@ Surface Dev Center Manager (SDCM) is a tool that utilizes the REST APIs made ava
 <br/>
 
 ## Creating a Shipping Label
+
 ```json
 {
     "createType": "shippingLabel",
@@ -123,8 +137,11 @@ Surface Dev Center Manager (SDCM) is a tool that utilizes the REST APIs made ava
 <br/>
 
 # Basic Operations
+
 ## Create a Product
+
 Create a json file '`Create_ProductName_HLK.json`' using the Product json example above.
+
 ```bash
 sdcm.exe -create Create_ProductName_HLK.json
 ```
@@ -135,7 +152,9 @@ sdcm.exe -create Create_ProductName_HLK.json
 <br/>
 
 ## List the Product
+
 Verify the product was created by listing the details.
+
 ```bash
 sdcm.exe -list product -productid PID
 ```
@@ -144,7 +163,9 @@ sdcm.exe -list product -productid PID
 <br/>
 
 ## Create a Submission
+
 Create a json file '`Create_ProductName_Submission_HLK.json`' using the Submission json example above.
+
 ```bash
 sdcm.exe -create Create_ProductName_Submission_HLK.json -productid PID
 ```
@@ -155,12 +176,15 @@ sdcm.exe -create Create_ProductName_Submission_HLK.json -productid PID
 <br/>
 
 ## List the Submission
+
 List all the submissions for the product
+
 ```bash
 sdcm.exe -list submission -productid PID
 ```
 
 List a specific submission for the product
+
 ```bash
 sdcm.exe -list submission -productid PID -submissionid SID
 ```
@@ -169,7 +193,11 @@ sdcm.exe -list submission -productid PID -submissionid SID
 <br/>
 
 ## Upload a package to a Submission
-Make sure the package (`.cab` or `.hlkx`) is signed by the [Extended Validation Certificate (EV Cert)](https://docs.microsoft.com/en-us/windows-hardware/drivers/dashboard/get-a-code-signing-certificate) registered with your Partner Center *Hardware* Account
+
+Make sure the package (`.cab` or `.hlkx`) is signed by
+the [Extended Validation Certificate (EV Cert)](https://docs.microsoft.com/en-us/windows-hardware/drivers/dashboard/get-a-code-signing-certificate)
+registered with your Partner Center *Hardware* Account
+
 ```bash
 sdcm.exe -upload test.hlkx -productid PID -submissionid SID
 ```
@@ -178,7 +206,9 @@ sdcm.exe -upload test.hlkx -productid PID -submissionid SID
 <br/>
 
 ## Commit a Submission
+
 When everything is ready to start processing the submission, commit it
+
 ```bash
 sdcm.exe -commit -productid PID -submissionid SID
 ```
@@ -187,6 +217,7 @@ sdcm.exe -commit -productid PID -submissionid SID
 <br/>
 
 ## Wait for a Submission to be Ready
+
 ```bash
 sdcm.exe -wait -productid PID -submissionid SID
 ```
@@ -195,6 +226,7 @@ sdcm.exe -wait -productid PID -submissionid SID
 <br/>
 
 ## Download files from a Submission
+
 ```bash
 sdcm.exe -download hlksigned.zip -productid PID -submissionid SID
 ```
@@ -203,25 +235,29 @@ sdcm.exe -download hlksigned.zip -productid PID -submissionid SID
 <br/>
 
 # WHQL signing a Driver
+
 > See `HLKx.ps1` in the Scripts folder.
 
 ---
 <br/>
 
 # Attestation signing a Driver
+
 > See `Attestation.ps1` in the Scripts folder.
 
 ---
 <br/>
 
 # Creating a Shipping Label
+
 > See `ShippingLabel.ps1` in the Scripts folder.
 
 ---
 <br/>
 
 # Contributing
-This project welcomes contributions and suggestions.  Most contributions require you to agree to a
+
+This project welcomes contributions and suggestions. Most contributions require you to agree to a
 Contributor License Agreement (CLA) declaring that you have the right to, and actually do, grant us
 the rights to use your contribution. For details, visit https://cla.microsoft.com.
 
