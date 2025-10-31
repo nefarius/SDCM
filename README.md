@@ -11,8 +11,6 @@ and manage shipping labels to release software on Windows Update.
 [Hardware Dashboard API](https://docs.microsoft.com/en-us/windows-hardware/drivers/dashboard/dashboard-api). Detailed
 > options are available with the `-?`, `-h` or `-help` option at the command line.
 
-<br/>
-
 # Getting Started
 
 1. Clone the repo
@@ -23,8 +21,6 @@ and manage shipping labels to release software on Windows Update.
     - Change clientId, tenantId and key to match the values from your app registration
     - You should not have to change the url or urlPrefix
 4. Build the project
-
-<br/>
 
 # Input Json Formats
 
@@ -61,8 +57,6 @@ and manage shipping labels to release software on Windows Update.
 
 > For an Attestation submission, change testHarness to Attestation.
 
-<br/>
-
 ## Creating a Submission
 
 ```json
@@ -74,8 +68,6 @@ and manage shipping labels to release software on Windows Update.
      }
  }
 ```
-
-<br/>
 
 ## Creating a Shipping Label
 
@@ -134,7 +126,6 @@ and manage shipping labels to release software on Windows Update.
 > Note that SDCM will auto-populate and publish all hardware IDs found in a Submission when creating a Shipping Label.
 
 ---
-<br/>
 
 # Basic Operations
 
@@ -149,7 +140,6 @@ sdcm.exe -create Create_ProductName_HLK.json
 > This will output a Product ID (PID) if successful
 
 ---
-<br/>
 
 ## List the Product
 
@@ -160,7 +150,6 @@ sdcm.exe -list product -productid PID
 ```
 
 ---
-<br/>
 
 ## Create a Submission
 
@@ -173,7 +162,6 @@ sdcm.exe -create Create_ProductName_Submission_HLK.json -productid PID
 > This will output a Submission ID (SID) if successful
 
 ---
-<br/>
 
 ## List the Submission
 
@@ -190,7 +178,6 @@ sdcm.exe -list submission -productid PID -submissionid SID
 ```
 
 ---
-<br/>
 
 ## Upload a package to a Submission
 
@@ -203,7 +190,6 @@ sdcm.exe -upload test.hlkx -productid PID -submissionid SID
 ```
 
 ---
-<br/>
 
 ## Commit a Submission
 
@@ -214,7 +200,6 @@ sdcm.exe -commit -productid PID -submissionid SID
 ```
 
 ---
-<br/>
 
 ## Wait for a Submission to be Ready
 
@@ -223,7 +208,6 @@ sdcm.exe -wait -productid PID -submissionid SID
 ```
 
 ---
-<br/>
 
 ## Download files from a Submission
 
@@ -232,28 +216,24 @@ sdcm.exe -download hlksigned.zip -productid PID -submissionid SID
 ```
 
 ---
-<br/>
 
 # WHQL signing a Driver
 
 > See `HLKx.ps1` in the Scripts folder.
 
 ---
-<br/>
 
 # Attestation signing a Driver
 
 > See `Attestation.ps1` in the Scripts folder.
 
 ---
-<br/>
 
 # Creating a Shipping Label
 
 > See `ShippingLabel.ps1` in the Scripts folder.
 
 ---
-<br/>
 
 # Contributing
 
