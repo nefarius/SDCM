@@ -35,8 +35,13 @@ public sealed class MsalAadTokenProvider(ILogger<MsalAadTokenProvider> logger) :
 
         string[] scopes = [resource.TrimEnd('/') + "/.default"];
 
-        AuthenticationResult? result = await TryAcquireSilentAsync(app, scopes, promptMode, cancellationToken)
-            .ConfigureAwait(false);
+        // "always" and "select-account" are explicit requests to bypass any cached/silent session,
+        // so they should go straight to the interactive flow rather than trying silently first.
+        bool forceInteractive = promptMode is AadPromptMode.Always or AadPromptMode.SelectAccount;
+
+        AuthenticationResult? result = forceInteractive
+            ? null
+            : await TryAcquireSilentAsync(app, scopes, promptMode, cancellationToken).ConfigureAwait(false);
 
         if (result is null && promptMode != AadPromptMode.Never)
         {
@@ -91,17 +96,12 @@ public sealed class MsalAadTokenProvider(ILogger<MsalAadTokenProvider> logger) :
             _ => Prompt.SelectAccount
         };
 
-        try
-        {
-            return await app.AcquireTokenInteractive(scopes)
-                .WithPrompt(prompt)
-                .ExecuteAsync(cancellationToken)
-                .ConfigureAwait(false);
-        }
-        catch (MsalException)
-        {
-            return null;
-        }
+        // Let MsalException (and OperationCanceledException) propagate with their original error code
+        // and description instead of being swallowed into a generic "not attempted" message.
+        return await app.AcquireTokenInteractive(scopes)
+            .WithPrompt(prompt)
+            .ExecuteAsync(cancellationToken)
+            .ConfigureAwait(false);
     }
 
     private static async Task RegisterTokenCacheAsync(IPublicClientApplication app)
@@ -111,10 +111,14 @@ public sealed class MsalAadTokenProvider(ILogger<MsalAadTokenProvider> logger) :
         Directory.CreateDirectory(cacheDir);
 
         StorageCreationPropertiesBuilder builder = new StorageCreationPropertiesBuilder("sdcm.msal.cache", cacheDir);
-        if (!OperatingSystem.IsWindows())
+        if (OperatingSystem.IsMacOS())
         {
-            // No native keychain/keyring integration on non-Windows platforms yet; fall back to a
-            // plain file rather than failing outright.
+            builder = builder.WithMacKeyChain("com.nefarius.sdcm", "sdcm.msal.cache");
+        }
+        else if (OperatingSystem.IsLinux())
+        {
+            // No native keyring integration on Linux yet; fall back to a plain file rather than
+            // failing outright.
             builder = builder.WithLinuxUnprotectedFile();
         }
 

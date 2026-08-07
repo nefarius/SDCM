@@ -21,7 +21,7 @@ internal static class EnumParsing
         }
 
         string normalized = value.Replace("-", string.Empty);
-        return Enum.TryParse(normalized, true, out result);
+        return Enum.TryParse(normalized, true, out result) && Enum.IsDefined(result);
     }
 
     public static TEnum ParseKebabOrThrow<TEnum>(string? value, string optionName) where TEnum : struct, Enum

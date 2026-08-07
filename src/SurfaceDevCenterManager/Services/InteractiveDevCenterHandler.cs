@@ -39,7 +39,6 @@ public sealed class InteractiveDevCenterHandler : IDevCenterHandler, IDisposable
     private readonly Guid _correlationId;
     private readonly string _baseUrl;
     private readonly LastCommandDelegate? _lastCommand;
-    private DevCenterTrace? _trace;
 
     public InteractiveDevCenterHandler(
         IAadTokenProvider tokenProvider,
@@ -62,19 +61,13 @@ public sealed class InteractiveDevCenterHandler : IDevCenterHandler, IDisposable
         };
     }
 
-    public async Task<DevCenterErrorDetails?> InvokeHdcService(
+    private async Task<(DevCenterErrorDetails? Error, DevCenterTrace Trace)> InvokeHdcServiceCore(
         HttpMethod method, string uri, object? input, Action<string>? processContent)
     {
         string requestId = Guid.NewGuid().ToString();
         string json = JsonSerializer.Serialize(input ?? new object());
 
-        using HttpRequestMessage request = new(method, uri);
-        _client.DefaultRequestHeaders.Remove("MS-CorrelationId");
-        _client.DefaultRequestHeaders.Remove("MS-RequestId");
-        _client.DefaultRequestHeaders.Add("MS-CorrelationId", _correlationId.ToString());
-        _client.DefaultRequestHeaders.Add("MS-RequestId", requestId);
-
-        _trace = new DevCenterTrace
+        DevCenterTrace trace = new()
         {
             CorrelationId = _correlationId.ToString(),
             RequestId = requestId,
@@ -83,40 +76,38 @@ public sealed class InteractiveDevCenterHandler : IDevCenterHandler, IDisposable
             Content = json
         };
 
-        _lastCommand?.Invoke(new DevCenterErrorDetails { Trace = _trace });
+        _lastCommand?.Invoke(new DevCenterErrorDetails { Trace = trace });
 
         if (method != HttpMethod.Get && method != HttpMethod.Post && method != HttpMethod.Put)
         {
-            return new DevCenterErrorDetails
+            return (new DevCenterErrorDetails
             {
                 HttpErrorCode = -1,
                 Code = DefaultErrorCode,
                 Message = "Unsupported HTTP method",
-                Trace = _trace
-            };
+                Trace = trace
+            }, trace);
         }
 
-        HttpResponseMessage response;
-        if (method == HttpMethod.Get)
+        using HttpRequestMessage request = new(method, uri);
+        request.Headers.Add("MS-CorrelationId", _correlationId.ToString());
+        request.Headers.Add("MS-RequestId", requestId);
+
+        // POST always sends a body (even an empty "{}"), matching the original semantics. PUT only
+        // sends a body when the caller actually supplied one, preserving the null-body behavior that
+        // callers such as CancelShippingLabel rely on.
+        if (method == HttpMethod.Post || (method == HttpMethod.Put && input != null))
         {
-            response = await _client.GetAsync(new Uri(uri)).ConfigureAwait(false);
-        }
-        else if (method == HttpMethod.Post)
-        {
-            using StringContent content = new(json, System.Text.Encoding.UTF8, "application/json");
-            response = await _client.PostAsync(new Uri(uri), content).ConfigureAwait(false);
-        }
-        else
-        {
-            response = await _client.PutAsync(new Uri(uri), null).ConfigureAwait(false);
+            request.Content = new StringContent(json, System.Text.Encoding.UTF8, "application/json");
         }
 
+        HttpResponseMessage response = await _client.SendAsync(request).ConfigureAwait(false);
         string body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
 
         if (response.IsSuccessStatusCode)
         {
             processContent?.Invoke(body);
-            return null;
+            return (null, trace);
         }
 
         DevCenterErrorReturn? returnError;
@@ -147,25 +138,33 @@ public sealed class InteractiveDevCenterHandler : IDevCenterHandler, IDisposable
         if (returnError.Error != null)
         {
             returnError.Error.HttpErrorCode = (int)response.StatusCode;
-            return returnError.Error;
+            return (returnError.Error, trace);
         }
 
-        return new DevCenterErrorDetails
+        return (new DevCenterErrorDetails
         {
             Headers = response.Headers,
             HttpErrorCode = (int)response.StatusCode,
             Code = returnError.StatusCode,
             Message = returnError.Message,
             ValidationErrors = returnError.ValidationErrors,
-            Trace = _trace
-        };
+            Trace = trace
+        }, trace);
+    }
+
+    public async Task<DevCenterErrorDetails?> InvokeHdcService(
+        HttpMethod method, string uri, object? input, Action<string>? processContent)
+    {
+        (DevCenterErrorDetails? error, _) = await InvokeHdcServiceCore(method, uri, input, processContent)
+            .ConfigureAwait(false);
+        return error;
     }
 
     public async Task<DevCenterResponse<TOutput>> InvokeHdcService<TOutput>(
         HttpMethod method, string uri, object? input, bool isMany) where TOutput : IArtifact
     {
         DevCenterResponse<TOutput> response = new();
-        response.Error = await InvokeHdcService(method, uri, input, content =>
+        (response.Error, DevCenterTrace trace) = await InvokeHdcServiceCore(method, uri, input, content =>
         {
             if (isMany)
             {
@@ -182,7 +181,7 @@ public sealed class InteractiveDevCenterHandler : IDevCenterHandler, IDisposable
             }
         }).ConfigureAwait(false);
 
-        response.Trace = _trace;
+        response.Trace = trace;
         return response;
     }
 
@@ -246,13 +245,14 @@ public sealed class InteractiveDevCenterHandler : IDevCenterHandler, IDisposable
     {
         string url = _baseUrl + string.Format(
             ProductSubmissionCommitUrl, Uri.EscapeDataString(productId), Uri.EscapeDataString(submissionId));
-        DevCenterErrorDetails? error = await InvokeHdcService(HttpMethod.Post, url, null, null).ConfigureAwait(false);
+        (DevCenterErrorDetails? error, DevCenterTrace trace) = await InvokeHdcServiceCore(HttpMethod.Post, url, null, null)
+            .ConfigureAwait(false);
 
         DevCenterResponse<bool> result = new()
         {
             Error = error,
             ReturnValue = [error == null],
-            Trace = _trace
+            Trace = trace
         };
 
         if (error is { HttpErrorCode: (int)HttpStatusCode.BadGateway } &&
@@ -302,12 +302,13 @@ public sealed class InteractiveDevCenterHandler : IDevCenterHandler, IDisposable
     {
         string url = _baseUrl + string.Format(
             CreateMetaDataUrl, Uri.EscapeDataString(productId), Uri.EscapeDataString(submissionId));
-        DevCenterErrorDetails? error = await InvokeHdcService(HttpMethod.Post, url, null, null).ConfigureAwait(false);
+        (DevCenterErrorDetails? error, DevCenterTrace trace) = await InvokeHdcServiceCore(HttpMethod.Post, url, null, null)
+            .ConfigureAwait(false);
         return new DevCenterResponse<bool>
         {
             Error = error,
             ReturnValue = [error == null],
-            Trace = _trace
+            Trace = trace
         };
     }
 
@@ -315,13 +316,17 @@ public sealed class InteractiveDevCenterHandler : IDevCenterHandler, IDisposable
         string productId, string submissionId, string shippingLabelId)
     {
         string url = _baseUrl + string.Format(
-            CancelShippingLabelUrl, productId, submissionId, shippingLabelId);
-        DevCenterErrorDetails? error = await InvokeHdcService(HttpMethod.Put, url, null, null).ConfigureAwait(false);
+            CancelShippingLabelUrl,
+            Uri.EscapeDataString(productId),
+            Uri.EscapeDataString(submissionId),
+            Uri.EscapeDataString(shippingLabelId));
+        (DevCenterErrorDetails? error, DevCenterTrace trace) = await InvokeHdcServiceCore(HttpMethod.Put, url, null, null)
+            .ConfigureAwait(false);
         return new DevCenterResponse<bool>
         {
             Error = error,
             ReturnValue = [error == null],
-            Trace = _trace
+            Trace = trace
         };
     }
 

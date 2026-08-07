@@ -65,7 +65,11 @@ public sealed class PartnerSubmissionTranslateHandler(
                     return errors.Report(response.Error);
                 }
 
-                Submission submission = response.ReturnValue![0];
+                if (!response.TryGetSingle(output, out Submission submission))
+                {
+                    return ExitCode.InvalidState;
+                }
+
                 output.Result(submission, s =>
                 {
                     Console.WriteLine($"ProductId: {s.ProductId}");

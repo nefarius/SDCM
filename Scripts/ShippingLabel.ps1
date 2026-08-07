@@ -73,11 +73,18 @@ param(
 $global:ErrorActionPreference = "stop"
 Set-StrictMode -Version Latest
 
+# This script always requests automatic installation (see isAutoInstallDuringOSUpgrade /
+# isAutoInstallOnApplicableSystems below), so per the API contract manualAcquisition must be false.
+if ($ManualAcquisition) {
+  throw "ManualAcquisition cannot be `$true` while isAutoInstallDuringOSUpgrade and isAutoInstallOnApplicableSystems are enabled (hardcoded `$true` in this script)."
+}
+
 function Invoke-Sdcm {
   & sdcm --output json @args
-  if ($LASTEXITCODE -ne 0) {
-    Write-Error "sdcm $($args -join ' ') failed with exit code $LASTEXITCODE"
-    exit $LASTEXITCODE
+  $exitCode = $LASTEXITCODE
+  if ($exitCode -ne 0) {
+    [Console]::Error.WriteLine("sdcm $($args -join ' ') failed with exit code $exitCode")
+    exit $exitCode
   }
 }
 

@@ -39,14 +39,21 @@ public sealed class ErrorReporter(IOutputWriter output, RunContext runContext, I
 
         if (error.Trace != null)
         {
+            // Deliberately omit Trace.Content: it's the raw outgoing request body and may carry
+            // business-sensitive or credential-equivalent data that shouldn't land in debug logs.
             logger.LogDebug(
-                "Request trace - Method: {Method}, Url: {Url}, RequestId: {RequestId}, Content: {Content}",
-                error.Trace.Method, error.Trace.Url, error.Trace.RequestId, error.Trace.Content);
+                "Request trace - Method: {Method}, Url: {Url}, RequestId: {RequestId}",
+                error.Trace.Method, error.Trace.Url, error.Trace.RequestId);
         }
 
         if (error.HttpErrorCode == 429)
         {
             return ExitCode.RateLimited;
+        }
+
+        if (error.HttpErrorCode is 401 or 403)
+        {
+            return ExitCode.AuthenticationFailed;
         }
 
         if (string.Equals(error.Code, EntityNotFound, StringComparison.OrdinalIgnoreCase))

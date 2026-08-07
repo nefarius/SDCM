@@ -41,7 +41,12 @@ public sealed class SubmissionCreateHandler(
                     return errors.Report(response.Error);
                 }
 
-                output.Result(response.ReturnValue![0], s => s.Dump());
+                if (!response.TryGetSingle(output, out Submission submission))
+                {
+                    return ExitCode.InvalidState;
+                }
+
+                output.Result(submission, s => s.Dump());
                 return ExitCode.Success;
             }
             catch (Exception ex)
@@ -135,7 +140,11 @@ public sealed class SubmissionUploadHandler(
                     return errors.Report(response.Error);
                 }
 
-                Submission submission = response.ReturnValue![0];
+                if (!response.TryGetSingle(output, out Submission submission))
+                {
+                    return ExitCode.InvalidState;
+                }
+
                 Download.Item? uploadTarget = submission.Downloads?.Items?
                     .FirstOrDefault(i => string.Equals(i.Type, "initialPackage", StringComparison.OrdinalIgnoreCase));
 
@@ -191,7 +200,11 @@ public sealed class SubmissionDownloadHandler(
                     return errors.Report(response.Error);
                 }
 
-                Submission submission = response.ReturnValue![0];
+                if (!response.TryGetSingle(output, out Submission submission))
+                {
+                    return ExitCode.InvalidState;
+                }
+
                 Download.Item? downloadTarget = submission.Downloads?.Items?
                     .FirstOrDefault(i => string.Equals(i.Type, "signedPackage", StringComparison.OrdinalIgnoreCase));
 
@@ -229,6 +242,13 @@ public sealed class SubmissionMetadataDownloadHandler(
             return ExitCode.IoError;
         }
 
+        string? metadataDestinationDirectory = Path.GetDirectoryName(Path.GetFullPath(input.OutputFile));
+        if (metadataDestinationDirectory != null && !Directory.Exists(metadataDestinationDirectory))
+        {
+            output.Error($"Destination directory does not exist: {metadataDestinationDirectory}");
+            return ExitCode.IoError;
+        }
+
         return await factory.UseAsync(input.Global, output, async api =>
         {
             try
@@ -240,7 +260,11 @@ public sealed class SubmissionMetadataDownloadHandler(
                     return errors.Report(response.Error);
                 }
 
-                Submission submission = response.ReturnValue![0];
+                if (!response.TryGetSingle(output, out Submission submission))
+                {
+                    return ExitCode.InvalidState;
+                }
+
                 Download.Item? metadataTarget = submission.Downloads?.Items?
                     .FirstOrDefault(i => string.Equals(i.Type, "driverMetadata", StringComparison.OrdinalIgnoreCase));
 
@@ -328,7 +352,11 @@ public sealed class SubmissionWaitHandler(IDevCenterHandlerFactory factory, IOut
                         return errors.Report(response.Error);
                     }
 
-                    Submission submission = response.ReturnValue![0];
+                    if (!response.TryGetSingle(output, out Submission submission))
+                    {
+                        return ExitCode.InvalidState;
+                    }
+
                     WorkflowStatus? status = submission.WorkflowStatus;
 
                     if (output.Format == OutputFormat.Text && status != null)
@@ -339,11 +367,9 @@ public sealed class SubmissionWaitHandler(IDevCenterHandlerFactory factory, IOut
                     bool metadataReady = !input.WaitMetadata || submission.Downloads?.Items?.Any(
                         i => string.Equals(i.Type, "driverMetadata", StringComparison.OrdinalIgnoreCase)) == true;
 
-                    bool failed = status?.State?.Contains("fail", StringComparison.OrdinalIgnoreCase) == true;
-                    bool terminal = failed
-                        || status?.State?.Contains("complet", StringComparison.OrdinalIgnoreCase) == true
-                        || status?.State?.Contains("publish", StringComparison.OrdinalIgnoreCase) == true
-                        || string.Equals(submission.CommitStatus, "commitFailed", StringComparison.OrdinalIgnoreCase);
+                    bool commitFailed = string.Equals(submission.CommitStatus, "commitFailed", StringComparison.OrdinalIgnoreCase);
+                    bool failed = status.IsFailed() || commitFailed;
+                    bool terminal = failed || status.IsTerminal();
 
                     if (terminal && metadataReady)
                     {
@@ -351,7 +377,7 @@ public sealed class SubmissionWaitHandler(IDevCenterHandlerFactory factory, IOut
                         return failed ? ExitCode.WorkflowFailed : ExitCode.Success;
                     }
 
-                    await Task.Delay(TimeSpan.FromSeconds(input.PollIntervalSeconds), linkedCts.Token)
+                    await Task.Delay(TimeSpan.FromSeconds(PollingDefaults.ClampPollInterval(input.PollIntervalSeconds)), linkedCts.Token)
                         .ConfigureAwait(false);
                 }
             }
@@ -368,6 +394,6 @@ public sealed class SubmissionWaitHandler(IDevCenterHandlerFactory factory, IOut
             {
                 return errors.ReportException(ex, "submission wait");
             }
-        }, cancellationToken);
+        }, linkedCts.Token);
     }
 }

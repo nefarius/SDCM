@@ -22,9 +22,6 @@ csharp_style_namespace_declarations = file_scoped:suggestion
 csharp_style_expression_bodied_methods = when_on_single_line:suggestion
 csharp_style_prefer_primary_constructors = true:suggestion
 
-# Nullable reference warnings should not fail the build during modernization
-dotnet_diagnostic.CS8618.severity = suggestion
-
 [*.{json,yml,yaml}]
 indent_size = 2
 

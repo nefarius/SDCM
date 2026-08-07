@@ -124,7 +124,7 @@ or when `auto` falls back to it):
 
 ## Command reference
 
-```
+```text
 sdcm
 ├─ product
 │  ├─ create              --input <file>

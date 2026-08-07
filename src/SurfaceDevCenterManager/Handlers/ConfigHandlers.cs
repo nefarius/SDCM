@@ -12,26 +12,26 @@ namespace SurfaceDevCenterManager.Handlers;
 public sealed record ConfigPathInput(string? ExplicitConfigPath);
 
 /// <summary>Prints the config discovery chain sdcm probes, and which entry (if any) currently resolves.</summary>
-public sealed class ConfigPathHandler
+public sealed class ConfigPathHandler(IOutputWriter output)
 {
     public Task<ExitCode> RunAsync(ConfigPathInput input, CancellationToken cancellationToken)
     {
         string? resolved = ConfigPathResolver.Resolve(input.ExplicitConfigPath);
 
-        Console.WriteLine("authconfig.json is probed for, in order:");
+        output.Progress("authconfig.json is probed for, in order:");
         int i = 1;
         foreach (string candidate in ConfigPathResolver.EnumerateCandidates(input.ExplicitConfigPath))
         {
             bool exists = File.Exists(candidate);
             bool isResolved = candidate == resolved;
             string marker = isResolved ? " <- using this one" : exists ? " (exists, shadowed)" : "";
-            Console.WriteLine($"  {i++}. {candidate}{marker}");
+            output.Progress($"  {i++}. {candidate}{marker}");
         }
 
         if (resolved == null)
         {
-            Console.WriteLine();
-            Console.WriteLine("No authconfig.json was found. Run 'sdcm config init' to create one.");
+            output.Progress("");
+            output.Progress("No authconfig.json was found. Run 'sdcm config init' to create one.");
         }
 
         return Task.FromResult(ExitCode.Success);
@@ -53,18 +53,34 @@ public sealed class ConfigInitHandler(IOutputWriter output)
             return Task.FromResult(ExitCode.IoError);
         }
 
-        string? directory = Path.GetDirectoryName(path);
-        if (directory != null)
-        {
-            Directory.CreateDirectory(directory);
-        }
-
         string sampleSourcePath = Path.Combine(AppContext.BaseDirectory, "authconfig.sample.json");
         string content = File.Exists(sampleSourcePath) ? File.ReadAllText(sampleSourcePath) : DefaultSample;
 
-        File.WriteAllText(path, content);
-        Console.WriteLine($"Wrote a starter authconfig.json to '{path}'.");
-        Console.WriteLine("Edit it to fill in tenantId/clientId (and key or managedIdentityClientId) for the 'default' profile.");
+        try
+        {
+            string? directory = Path.GetDirectoryName(path);
+            if (directory != null)
+            {
+                Directory.CreateDirectory(directory);
+            }
+
+            File.WriteAllText(path, content);
+
+            // authconfig.json can contain a client secret; keep it readable only by the current user
+            // on platforms where that isn't already the filesystem default.
+            if (!OperatingSystem.IsWindows())
+            {
+                File.SetUnixFileMode(path, UnixFileMode.UserRead | UnixFileMode.UserWrite);
+            }
+        }
+        catch (Exception ex) when (ex is UnauthorizedAccessException or IOException)
+        {
+            output.Error($"Failed to write '{path}': {ex.Message}");
+            return Task.FromResult(ExitCode.IoError);
+        }
+
+        output.Progress($"Wrote a starter authconfig.json to '{path}'.");
+        output.Progress("Edit it to fill in tenantId/clientId (and key or managedIdentityClientId) for the 'default' profile.");
 
         return Task.FromResult(ExitCode.Success);
     }

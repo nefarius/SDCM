@@ -47,7 +47,12 @@ public sealed class ShippingLabelCreateHandler(
                     return errors.Report(response.Error);
                 }
 
-                output.Result(response.ReturnValue![0], s => s.Dump());
+                if (!response.TryGetSingle(output, out ShippingLabel shippingLabel))
+                {
+                    return ExitCode.InvalidState;
+                }
+
+                output.Result(shippingLabel, s => s.Dump());
                 return ExitCode.Success;
             }
             catch (Exception ex)
@@ -125,7 +130,11 @@ public sealed class ShippingLabelWaitHandler(
                         return errors.Report(response.Error);
                     }
 
-                    ShippingLabel shippingLabel = response.ReturnValue![0];
+                    if (!response.TryGetSingle(output, out ShippingLabel shippingLabel))
+                    {
+                        return ExitCode.InvalidState;
+                    }
+
                     WorkflowStatus? status = shippingLabel.WorkflowStatus;
 
                     if (output.Format == OutputFormat.Text && status != null)
@@ -133,10 +142,8 @@ public sealed class ShippingLabelWaitHandler(
                         await status.Dump().ConfigureAwait(false);
                     }
 
-                    bool failed = status?.State?.Contains("fail", StringComparison.OrdinalIgnoreCase) == true;
-                    bool terminal = failed
-                        || status?.State?.Contains("complet", StringComparison.OrdinalIgnoreCase) == true
-                        || status?.State?.Contains("publish", StringComparison.OrdinalIgnoreCase) == true;
+                    bool failed = status.IsFailed();
+                    bool terminal = status.IsTerminal();
 
                     if (terminal)
                     {
@@ -144,7 +151,7 @@ public sealed class ShippingLabelWaitHandler(
                         return failed ? ExitCode.WorkflowFailed : ExitCode.Success;
                     }
 
-                    await Task.Delay(TimeSpan.FromSeconds(input.PollIntervalSeconds), linkedCts.Token)
+                    await Task.Delay(TimeSpan.FromSeconds(PollingDefaults.ClampPollInterval(input.PollIntervalSeconds)), linkedCts.Token)
                         .ConfigureAwait(false);
                 }
             }
@@ -161,6 +168,6 @@ public sealed class ShippingLabelWaitHandler(
             {
                 return errors.ReportException(ex, "shipping-label wait");
             }
-        }, cancellationToken);
+        }, linkedCts.Token);
     }
 }

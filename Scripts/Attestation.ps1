@@ -44,9 +44,10 @@ Set-StrictMode -Version Latest
 
 function Invoke-Sdcm {
   & sdcm --output json @args
-  if ($LASTEXITCODE -ne 0) {
-    Write-Error "sdcm $($args -join ' ') failed with exit code $LASTEXITCODE"
-    exit $LASTEXITCODE
+  $exitCode = $LASTEXITCODE
+  if ($exitCode -ne 0) {
+    [Console]::Error.WriteLine("sdcm $($args -join ' ') failed with exit code $exitCode")
+    exit $exitCode
   }
 }
 

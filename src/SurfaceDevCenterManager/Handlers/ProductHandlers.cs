@@ -39,7 +39,12 @@ public sealed class ProductCreateHandler(IDevCenterHandlerFactory factory, IOutp
                     return errors.Report(response.Error);
                 }
 
-                output.Result(response.ReturnValue![0], p => p.Dump());
+                if (!response.TryGetSingle(output, out Product product))
+                {
+                    return ExitCode.InvalidState;
+                }
+
+                output.Result(product, p => p.Dump());
                 return ExitCode.Success;
             }
             catch (Exception ex)

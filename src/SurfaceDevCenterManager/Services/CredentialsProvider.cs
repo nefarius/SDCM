@@ -75,6 +75,9 @@ public sealed class CredentialsProvider(
 
                 credentials.Key = profile.Key;
                 break;
+
+            default:
+                throw new InvalidOperationException($"Unsupported auth mode: {effective}.");
         }
 
         return new ResolvedCredentials(credentials, effective, profile, url, urlPrefix, authority);

@@ -47,7 +47,7 @@ public static class DevCenterHandlerFactoryExtensions
                 .CreateAsync(global.Profile, global.Auth, global.Aad, global.TimeoutSeconds, cancellationToken)
                 .ConfigureAwait(false);
         }
-        catch (Exception ex) when (output != null)
+        catch (Exception ex) when (output != null && ex is not OperationCanceledException)
         {
             output.Error(ex.Message);
             return ExitCode.AuthenticationFailed;
