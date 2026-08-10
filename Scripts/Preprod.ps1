@@ -57,7 +57,10 @@ Write-Output ""
 
 Write-Output "> Submit Package"
 $submitResult = Invoke-Sdcm preprod-submission submit --package $InputPath | ConvertFrom-Json
-$PackageId = $submitResult.id
+$PackageId = $null
+if ($submitResult -and $submitResult.PSObject.Properties['id']) {
+  $PackageId = $submitResult.id
+}
 if ([string]::IsNullOrEmpty($PackageId)) {
   [Console]::Error.WriteLine("sdcm preprod-submission submit did not return a package id.")
   exit 1
