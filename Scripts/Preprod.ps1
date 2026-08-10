@@ -26,7 +26,7 @@
 
 param(
   [Parameter(Mandatory = $true, Position = 0)]
-  [ValidateScript( { Test-Path -Path $_ -PathType Leaf })]
+  [ValidateScript( { Test-Path -LiteralPath $_ -PathType Leaf })]
   [string] $InputPath,
 
   [Parameter(Mandatory = $false, Position = 1)]
@@ -65,7 +65,7 @@ if ([string]::IsNullOrEmpty($PackageId)) {
 Write-Output "    * PackageId: $PackageId"
 
 Write-Output "> Wait for Signing to complete"
-Invoke-Sdcm preprod-submission wait --package-id $PackageId
+Invoke-Sdcm preprod-submission wait --package-id $PackageId | Out-Null
 
 Write-Output "> List Assets"
 $assets = @(Invoke-Sdcm preprod-submission assets --package-id $PackageId | ConvertFrom-Json)
