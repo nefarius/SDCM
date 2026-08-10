@@ -61,18 +61,27 @@ public sealed class DevCenterPreprodHandler : IDevCenterPreprodHandler, IDisposa
         return _executor.HdcGet<PreprodPackage>(url, false, cancellationToken);
     }
 
-    public Task<DevCenterResponse<PreprodPackageAsset>> GetPreprodPackageAssets(
+    public async Task<DevCenterResponse<PreprodPackageAsset>> GetPreprodPackageAssets(
         string packageId, string? assetId = null)
     {
-        string url = _baseUrl + string.Format(PackageAssetsUrl, Uri.EscapeDataString(packageId));
-        bool isMany = string.IsNullOrEmpty(assetId);
-        if (!isMany)
+        if (!string.IsNullOrEmpty(assetId))
         {
-            url = _baseUrl + string.Format(
-                PackageAssetUrl, Uri.EscapeDataString(packageId), Uri.EscapeDataString(assetId!));
+            string singleUrl = _baseUrl + string.Format(
+                PackageAssetUrl, Uri.EscapeDataString(packageId), Uri.EscapeDataString(assetId));
+            return await _executor.HdcGet<PreprodPackageAsset>(singleUrl, false).ConfigureAwait(false);
         }
 
-        return _executor.HdcGet<PreprodPackageAsset>(url, isMany);
+        // Unlike the library-backed list endpoints (products, submissions, shipping labels,
+        // audiences), which wrap collections in a Response<T>/"value" envelope, this endpoint
+        // returns a plain JSON array, so it can't go through HdcGet's isMany:true path.
+        string url = _baseUrl + string.Format(PackageAssetsUrl, Uri.EscapeDataString(packageId));
+        DevCenterResponse<PreprodPackageAsset> response = new();
+        (response.Error, response.Trace) = await _executor.InvokeHdcServiceCore(HttpMethod.Get, url, null, content =>
+        {
+            response.ReturnValue = JsonSerializer.Deserialize<List<PreprodPackageAsset>>(content);
+        }).ConfigureAwait(false);
+
+        return response;
     }
 
     public Task<DevCenterErrorDetails?> DownloadPreprodPackageAsset(
