@@ -5,7 +5,8 @@ Surface Dev Center Manager (SDCM) is a .NET tool that automates common Microsoft
 [Hardware Dashboard API](https://docs.microsoft.com/en-us/windows-hardware/drivers/dashboard/dashboard-api).
 
 **sdcm** lets you create `Attestation` and `WHQL` products and submissions, upload and download
-packages, and manage shipping labels to release drivers on Windows Update.
+packages, manage shipping labels to release drivers on Windows Update, and submit packages for
+[preproduction signing](https://learn.microsoft.com/en-us/windows-hardware/drivers/dashboard/manage-preprod-submissions).
 
 > This is `nefarius/SDCM`, a modernized fork of [`microsoft/SDCM`](https://github.com/microsoft/SDCM):
 > .NET 10, dependency injection, `System.CommandLine`, MSAL instead of the now end-of-life ADAL, and
@@ -140,6 +141,12 @@ sdcm
 │  └─ metadata
 │     ├─ download         --product-id --submission-id --output-file <path>
 │     └─ create           --product-id --submission-id
+├─ preprod-submission
+│  ├─ submit              --package <path>
+│  ├─ status              --package-id <id>
+│  ├─ assets              --package-id <id> [--asset-id <id>]
+│  ├─ download            --package-id <id> --asset-id <id> --output-file <path>
+│  └─ wait                --package-id <id> [--poll-interval <sec>] [--wait-timeout <sec>]
 ├─ shipping-label
 │  ├─ create              --product-id --submission-id --input <file> [--partner-id]
 │  ├─ list                --product-id --submission-id [--shipping-label-id]
@@ -284,6 +291,16 @@ Download the signed result:
 sdcm submission download --product-id 12345 --submission-id 67890 --output-file signed.zip
 ```
 
+Get a package signed for [preproduction testing](https://learn.microsoft.com/en-us/windows-hardware/drivers/dashboard/manage-preprod-submissions)
+instead - no product/submission needed, just the EV-signed package itself:
+
+```bash
+$packageId = (sdcm preprod-submission submit --package test.cab --output json | ConvertFrom-Json).id
+sdcm preprod-submission wait --package-id $packageId
+sdcm preprod-submission assets --package-id $packageId
+sdcm preprod-submission download --package-id $packageId --asset-id <asset-id-from-assets> --output-file signed.zip
+```
+
 Add `--output json` to any command to get machine-readable results for scripting, instead of
 regexing human-readable text:
 
@@ -313,12 +330,13 @@ $id = (sdcm product create --input product.json --output json | ConvertFrom-Json
 
 ## Automation scripts
 
-The `Scripts/` folder has three ready-made end-to-end scripts, updated for the new CLI and requiring
+The `Scripts/` folder has ready-made end-to-end scripts, updated for the new CLI and requiring
 `sdcm` to be installed and on `PATH`:
 
 - [`Scripts/HLKx.ps1`](Scripts/HLKx.ps1) - WHQL-sign a driver from a signed HLKx package
 - [`Scripts/Attestation.ps1`](Scripts/Attestation.ps1) - Attestation-sign a driver package
 - [`Scripts/ShippingLabel.ps1`](Scripts/ShippingLabel.ps1) - create and wait on a shipping label
+- [`Scripts/Preprod.ps1`](Scripts/Preprod.ps1) - get a package signed for preproduction testing
 
 They use `--output json | ConvertFrom-Json` to pick up created ids and check `$LASTEXITCODE` after
 every invocation, so a failed step stops the script instead of silently continuing (a bug in the
