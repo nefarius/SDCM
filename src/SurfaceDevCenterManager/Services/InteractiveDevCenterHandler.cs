@@ -5,8 +5,6 @@
 --*/
 
 using System.Net;
-using System.Net.Http.Headers;
-using System.Text.Json;
 using Microsoft.Devices.HardwareDevCenterManager;
 using Microsoft.Devices.HardwareDevCenterManager.DevCenterApi;
 
@@ -21,8 +19,6 @@ namespace SurfaceDevCenterManager.Services;
 /// </summary>
 public sealed class InteractiveDevCenterHandler : IDevCenterHandler, IDisposable
 {
-    private const string DefaultErrorCode = "InvalidInput";
-
     private const string ProductsUrl = "/hardware/products";
     private const string ProductSubmissionUrl = "/hardware/products/{0}/submissions";
 
@@ -36,9 +32,8 @@ public sealed class InteractiveDevCenterHandler : IDevCenterHandler, IDisposable
     private const string CancelShippingLabelUrl = "/hardware/products/{0}/submissions/{1}/shippingLabels/{2}/cancel";
 
     private readonly HttpClient _client;
-    private readonly Guid _correlationId;
     private readonly string _baseUrl;
-    private readonly LastCommandDelegate? _lastCommand;
+    private readonly HdcJsonRequestExecutor _executor;
 
     public InteractiveDevCenterHandler(
         IAadTokenProvider tokenProvider,
@@ -51,153 +46,40 @@ public sealed class InteractiveDevCenterHandler : IDevCenterHandler, IDisposable
         DevCenterOptions options)
     {
         _baseUrl = new Uri(new Uri(url, UriKind.Absolute), urlPrefix).AbsoluteUri;
-        _correlationId = options.CorrelationId;
-        _lastCommand = options.LastCommand;
 
         BearerTokenHandler bearerHandler = new(tokenProvider, clientId, authority, redirectUri, url, promptMode);
         _client = new HttpClient(bearerHandler, true)
         {
             Timeout = TimeSpan.FromSeconds(options.HttpTimeoutSeconds)
         };
+        _executor = new HdcJsonRequestExecutor(_client, options.CorrelationId, options.LastCommand);
     }
 
-    private async Task<(DevCenterErrorDetails? Error, DevCenterTrace Trace)> InvokeHdcServiceCore(
+    public Task<DevCenterErrorDetails?> InvokeHdcService(
         HttpMethod method, string uri, object? input, Action<string>? processContent)
     {
-        string requestId = Guid.NewGuid().ToString();
-        string json = JsonSerializer.Serialize(input ?? new object());
-
-        DevCenterTrace trace = new()
-        {
-            CorrelationId = _correlationId.ToString(),
-            RequestId = requestId,
-            Method = method.ToString(),
-            Url = uri,
-            Content = json
-        };
-
-        _lastCommand?.Invoke(new DevCenterErrorDetails { Trace = trace });
-
-        if (method != HttpMethod.Get && method != HttpMethod.Post && method != HttpMethod.Put)
-        {
-            return (new DevCenterErrorDetails
-            {
-                HttpErrorCode = -1,
-                Code = DefaultErrorCode,
-                Message = "Unsupported HTTP method",
-                Trace = trace
-            }, trace);
-        }
-
-        using HttpRequestMessage request = new(method, uri);
-        request.Headers.Add("MS-CorrelationId", _correlationId.ToString());
-        request.Headers.Add("MS-RequestId", requestId);
-
-        // POST always sends a body (even an empty "{}"), matching the original semantics. PUT only
-        // sends a body when the caller actually supplied one, preserving the null-body behavior that
-        // callers such as CancelShippingLabel rely on.
-        if (method == HttpMethod.Post || (method == HttpMethod.Put && input != null))
-        {
-            request.Content = new StringContent(json, System.Text.Encoding.UTF8, "application/json");
-        }
-
-        HttpResponseMessage response = await _client.SendAsync(request).ConfigureAwait(false);
-        string body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
-
-        if (response.IsSuccessStatusCode)
-        {
-            processContent?.Invoke(body);
-            return (null, trace);
-        }
-
-        DevCenterErrorReturn? returnError;
-        try
-        {
-            returnError = JsonSerializer.Deserialize<DevCenterErrorReturn>(body);
-        }
-        catch (JsonException)
-        {
-            returnError = new DevCenterErrorReturn
-            {
-                HttpErrorCode = (int)response.StatusCode,
-                StatusCode = ((int)response.StatusCode) + " " + response.StatusCode,
-                Message = body
-            };
-        }
-
-        if (returnError is null || (returnError.HttpErrorCode.HasValue && returnError.HttpErrorCode.Value == 0))
-        {
-            returnError = new DevCenterErrorReturn
-            {
-                HttpErrorCode = (int)response.StatusCode,
-                StatusCode = ((int)response.StatusCode) + " " + response.StatusCode,
-                Message = response.ReasonPhrase
-            };
-        }
-
-        if (returnError.Error != null)
-        {
-            returnError.Error.HttpErrorCode = (int)response.StatusCode;
-            return (returnError.Error, trace);
-        }
-
-        return (new DevCenterErrorDetails
-        {
-            Headers = response.Headers,
-            HttpErrorCode = (int)response.StatusCode,
-            Code = returnError.StatusCode,
-            Message = returnError.Message,
-            ValidationErrors = returnError.ValidationErrors,
-            Trace = trace
-        }, trace);
+        return _executor.InvokeHdcService(method, uri, input, processContent);
     }
 
-    public async Task<DevCenterErrorDetails?> InvokeHdcService(
-        HttpMethod method, string uri, object? input, Action<string>? processContent)
-    {
-        (DevCenterErrorDetails? error, _) = await InvokeHdcServiceCore(method, uri, input, processContent)
-            .ConfigureAwait(false);
-        return error;
-    }
-
-    public async Task<DevCenterResponse<TOutput>> InvokeHdcService<TOutput>(
+    public Task<DevCenterResponse<TOutput>> InvokeHdcService<TOutput>(
         HttpMethod method, string uri, object? input, bool isMany) where TOutput : IArtifact
     {
-        DevCenterResponse<TOutput> response = new();
-        (response.Error, DevCenterTrace trace) = await InvokeHdcServiceCore(method, uri, input, content =>
-        {
-            if (isMany)
-            {
-                Response<TOutput>? parsed = JsonSerializer.Deserialize<Response<TOutput>>(content);
-                response.ReturnValue = parsed?.Value;
-            }
-            else
-            {
-                TOutput? parsed = JsonSerializer.Deserialize<TOutput>(content);
-                if (parsed?.Id != null)
-                {
-                    response.ReturnValue = [parsed];
-                }
-            }
-        }).ConfigureAwait(false);
-
-        response.Trace = trace;
-        return response;
+        return _executor.InvokeHdcService<TOutput>(method, uri, input, isMany);
     }
 
     public Task<DevCenterResponse<TOutput>> HdcGet<TOutput>(string uri, bool isMany) where TOutput : IArtifact
     {
-        return InvokeHdcService<TOutput>(HttpMethod.Get, uri, null, isMany);
+        return _executor.HdcGet<TOutput>(uri, isMany);
     }
 
     public Task<DevCenterResponse<TOutput>> HdcPost<TOutput>(string uri, object input) where TOutput : IArtifact
     {
-        return InvokeHdcService<TOutput>(HttpMethod.Post, uri, input, false);
+        return _executor.HdcPost<TOutput>(uri, input);
     }
 
     public Task<DevCenterResponse<Product>> NewProduct(NewProduct input)
     {
-        return HdcPost<Product>(_baseUrl + ProductsUrl, input);
+        return _executor.HdcPost<Product>(_baseUrl + ProductsUrl, input);
     }
 
     public Task<DevCenterResponse<Product>> GetProducts(string? productId = null)
@@ -209,13 +91,13 @@ public sealed class InteractiveDevCenterHandler : IDevCenterHandler, IDisposable
             url += "/" + Uri.EscapeDataString(productId!);
         }
 
-        return HdcGet<Product>(url, isMany);
+        return _executor.HdcGet<Product>(url, isMany);
     }
 
     public Task<DevCenterResponse<Submission>> NewSubmission(string productId, NewSubmission submissionInfo)
     {
         string url = _baseUrl + string.Format(ProductSubmissionUrl, Uri.EscapeDataString(productId));
-        return HdcPost<Submission>(url, submissionInfo);
+        return _executor.HdcPost<Submission>(url, submissionInfo);
     }
 
     public Task<DevCenterResponse<Submission>> GetSubmission(string productId, string? submissionId = null)
@@ -227,7 +109,7 @@ public sealed class InteractiveDevCenterHandler : IDevCenterHandler, IDisposable
             url += "/" + Uri.EscapeDataString(submissionId!);
         }
 
-        return HdcGet<Submission>(url, isMany);
+        return _executor.HdcGet<Submission>(url, isMany);
     }
 
     public Task<DevCenterResponse<Submission>> GetPartnerSubmission(
@@ -238,15 +120,15 @@ public sealed class InteractiveDevCenterHandler : IDevCenterHandler, IDisposable
             Uri.EscapeDataString(publisherId),
             Uri.EscapeDataString(productId),
             Uri.EscapeDataString(submissionId));
-        return HdcGet<Submission>(url, string.IsNullOrEmpty(submissionId));
+        return _executor.HdcGet<Submission>(url, string.IsNullOrEmpty(submissionId));
     }
 
     public async Task<DevCenterResponse<bool>> CommitSubmission(string productId, string submissionId)
     {
         string url = _baseUrl + string.Format(
             ProductSubmissionCommitUrl, Uri.EscapeDataString(productId), Uri.EscapeDataString(submissionId));
-        (DevCenterErrorDetails? error, DevCenterTrace trace) = await InvokeHdcServiceCore(HttpMethod.Post, url, null, null)
-            .ConfigureAwait(false);
+        (DevCenterErrorDetails? error, DevCenterTrace trace) = await _executor
+            .InvokeHdcServiceCore(HttpMethod.Post, url, null, null).ConfigureAwait(false);
 
         DevCenterResponse<bool> result = new()
         {
@@ -275,7 +157,7 @@ public sealed class InteractiveDevCenterHandler : IDevCenterHandler, IDisposable
     {
         string url = _baseUrl + string.Format(
             ShippingLabelUrl, Uri.EscapeDataString(productId), Uri.EscapeDataString(submissionId));
-        return HdcPost<ShippingLabel>(url, shippingLabelInfo);
+        return _executor.HdcPost<ShippingLabel>(url, shippingLabelInfo);
     }
 
     public Task<DevCenterResponse<ShippingLabel>> GetShippingLabels(
@@ -290,20 +172,20 @@ public sealed class InteractiveDevCenterHandler : IDevCenterHandler, IDisposable
         }
 
         url += "?includeTargetingInfo=true";
-        return HdcGet<ShippingLabel>(url, isMany);
+        return _executor.HdcGet<ShippingLabel>(url, isMany);
     }
 
     public Task<DevCenterResponse<Audience>> GetAudiences()
     {
-        return HdcGet<Audience>(_baseUrl + AudienceUrl, true);
+        return _executor.HdcGet<Audience>(_baseUrl + AudienceUrl, true);
     }
 
     public async Task<DevCenterResponse<bool>> CreateMetaData(string productId, string submissionId)
     {
         string url = _baseUrl + string.Format(
             CreateMetaDataUrl, Uri.EscapeDataString(productId), Uri.EscapeDataString(submissionId));
-        (DevCenterErrorDetails? error, DevCenterTrace trace) = await InvokeHdcServiceCore(HttpMethod.Post, url, null, null)
-            .ConfigureAwait(false);
+        (DevCenterErrorDetails? error, DevCenterTrace trace) = await _executor
+            .InvokeHdcServiceCore(HttpMethod.Post, url, null, null).ConfigureAwait(false);
         return new DevCenterResponse<bool>
         {
             Error = error,
@@ -320,8 +202,8 @@ public sealed class InteractiveDevCenterHandler : IDevCenterHandler, IDisposable
             Uri.EscapeDataString(productId),
             Uri.EscapeDataString(submissionId),
             Uri.EscapeDataString(shippingLabelId));
-        (DevCenterErrorDetails? error, DevCenterTrace trace) = await InvokeHdcServiceCore(HttpMethod.Put, url, null, null)
-            .ConfigureAwait(false);
+        (DevCenterErrorDetails? error, DevCenterTrace trace) = await _executor
+            .InvokeHdcServiceCore(HttpMethod.Put, url, null, null).ConfigureAwait(false);
         return new DevCenterResponse<bool>
         {
             Error = error,
@@ -333,29 +215,5 @@ public sealed class InteractiveDevCenterHandler : IDevCenterHandler, IDisposable
     public void Dispose()
     {
         _client.Dispose();
-    }
-
-    /// <summary>Attaches a bearer token acquired via MSAL to every outgoing request.</summary>
-    private sealed class BearerTokenHandler(
-        IAadTokenProvider tokenProvider,
-        string clientId,
-        string authority,
-        string redirectUri,
-        string resource,
-        AadPromptMode promptMode) : DelegatingHandler(new HttpClientHandler())
-    {
-        private string? _accessToken;
-
-        protected override async Task<HttpResponseMessage> SendAsync(
-            HttpRequestMessage request, CancellationToken cancellationToken)
-        {
-            // MSAL's own cache makes repeated acquisitions within a process cheap (silent cache hit),
-            // so there is no need to hand-roll a token cache or a request-retry-on-401 here.
-            _accessToken = await tokenProvider.AcquireTokenAsync(
-                clientId, authority, redirectUri, resource, promptMode, cancellationToken).ConfigureAwait(false);
-
-            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _accessToken);
-            return await base.SendAsync(request, cancellationToken).ConfigureAwait(false);
-        }
     }
 }

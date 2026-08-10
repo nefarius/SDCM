@@ -32,6 +32,11 @@ internal static class ServiceCollectionExtensions
         services.AddTransient<SubmissionWaitHandler>();
         services.AddTransient<SubmissionMetadataDownloadHandler>();
         services.AddTransient<SubmissionMetadataCreateHandler>();
+        services.AddTransient<PreprodSubmitHandler>();
+        services.AddTransient<PreprodStatusHandler>();
+        services.AddTransient<PreprodAssetsHandler>();
+        services.AddTransient<PreprodDownloadHandler>();
+        services.AddTransient<PreprodWaitHandler>();
         services.AddTransient<ShippingLabelCreateHandler>();
         services.AddTransient<ShippingLabelListHandler>();
         services.AddTransient<ShippingLabelWaitHandler>();

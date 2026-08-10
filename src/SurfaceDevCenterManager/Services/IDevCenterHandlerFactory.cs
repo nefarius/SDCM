@@ -19,4 +19,15 @@ public interface IDevCenterHandlerFactory
     Task<IDevCenterHandler> CreateAsync(
         string profileName, AuthMode authMode, AadPromptMode promptMode, uint httpTimeoutSeconds,
         CancellationToken cancellationToken);
+
+    /// <summary>
+    ///     Builds an <see cref="IDevCenterPreprodHandler" /> for a given profile/auth mode. The
+    ///     library has no built-in support for the preprod endpoints, so this authenticates and
+    ///     builds its <see cref="HttpClient" /> the same way <see cref="CreateAsync" /> does for the
+    ///     library-backed <see cref="IDevCenterHandler" />, just pointed at sdcm's own
+    ///     <see cref="DevCenterPreprodHandler" /> instead.
+    /// </summary>
+    Task<IDevCenterPreprodHandler> CreatePreprodAsync(
+        string profileName, AuthMode authMode, AadPromptMode promptMode, uint httpTimeoutSeconds,
+        CancellationToken cancellationToken);
 }

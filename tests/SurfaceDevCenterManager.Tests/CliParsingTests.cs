@@ -30,6 +30,12 @@ public class CliParsingTests
     [InlineData("submission wait --product-id 1 --submission-id 2")]
     [InlineData("submission metadata create --product-id 1 --submission-id 2")]
     [InlineData("submission metadata download --product-id 1 --submission-id 2 --output-file meta.zip")]
+    [InlineData("preprod-submission submit --package pkg.cab")]
+    [InlineData("preprod-submission status --package-id 1")]
+    [InlineData("preprod-submission assets --package-id 1")]
+    [InlineData("preprod-submission assets --package-id 1 --asset-id 2")]
+    [InlineData("preprod-submission download --package-id 1 --asset-id 2 --output-file signed.zip")]
+    [InlineData("preprod-submission wait --package-id 1")]
     [InlineData("shipping-label create --product-id 1 --submission-id 2 --input file.json")]
     [InlineData("shipping-label list --product-id 1 --submission-id 2")]
     [InlineData("shipping-label wait --product-id 1 --submission-id 2 --shipping-label-id 3")]
@@ -51,6 +57,9 @@ public class CliParsingTests
     [InlineData("submission create --product-id 1")] // missing --input
     [InlineData("submission commit --product-id 1")] // missing --submission-id
     [InlineData("submission upload --product-id 1 --submission-id 2")] // missing --package
+    [InlineData("preprod-submission submit")] // missing --package
+    [InlineData("preprod-submission status")] // missing --package-id
+    [InlineData("preprod-submission download --package-id 1 --asset-id 2")] // missing --output-file
     [InlineData("shipping-label wait --product-id 1 --submission-id 2")] // missing --shipping-label-id
     [InlineData("partner-submission list --product-id 1 --submission-id 2")] // missing --publisher-id
     public void MissingRequiredOptions_ProduceParseErrors(string commandLine)

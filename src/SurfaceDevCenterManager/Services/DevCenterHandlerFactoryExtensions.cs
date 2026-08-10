@@ -62,4 +62,35 @@ public static class DevCenterHandlerFactoryExtensions
             (handler as IDisposable)?.Dispose();
         }
     }
+
+    /// <summary>Same as <see cref="UseAsync(IDevCenterHandlerFactory,GlobalInvocationOptions,Func{IDevCenterHandler,Task{ExitCode}},CancellationToken)" />, for the preprod submission handler.</summary>
+    public static async Task<ExitCode> UsePreprodAsync(
+        this IDevCenterHandlerFactory factory,
+        GlobalInvocationOptions global,
+        IOutputWriter output,
+        Func<IDevCenterPreprodHandler, Task<ExitCode>> action,
+        CancellationToken cancellationToken)
+    {
+        IDevCenterPreprodHandler handler;
+        try
+        {
+            handler = await factory
+                .CreatePreprodAsync(global.Profile, global.Auth, global.Aad, global.TimeoutSeconds, cancellationToken)
+                .ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            output.Error(ex.Message);
+            return ExitCode.AuthenticationFailed;
+        }
+
+        try
+        {
+            return await action(handler).ConfigureAwait(false);
+        }
+        finally
+        {
+            (handler as IDisposable)?.Dispose();
+        }
+    }
 }

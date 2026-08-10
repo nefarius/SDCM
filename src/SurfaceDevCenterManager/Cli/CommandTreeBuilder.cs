@@ -25,6 +25,7 @@ internal static class CommandTreeBuilder
 
         root.Subcommands.Add(ProductCommand.Build(accessor));
         root.Subcommands.Add(SubmissionCommand.Build(accessor));
+        root.Subcommands.Add(PreprodSubmissionCommand.Build(accessor));
         root.Subcommands.Add(ShippingLabelCommand.Build(accessor));
         root.Subcommands.Add(PartnerSubmissionCommand.Build(accessor));
         root.Subcommands.Add(AudienceCommand.Build(accessor));
