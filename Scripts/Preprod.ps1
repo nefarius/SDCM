@@ -58,10 +58,14 @@ Write-Output ""
 Write-Output "> Submit Package"
 $submitResult = Invoke-Sdcm preprod-submission submit --package $InputPath | ConvertFrom-Json
 $PackageId = $submitResult.id
+if ([string]::IsNullOrEmpty($PackageId)) {
+  [Console]::Error.WriteLine("sdcm preprod-submission submit did not return a package id.")
+  exit 1
+}
 Write-Output "    * PackageId: $PackageId"
 
 Write-Output "> Wait for Signing to complete"
-$waitResult = Invoke-Sdcm preprod-submission wait --package-id $PackageId | ConvertFrom-Json
+Invoke-Sdcm preprod-submission wait --package-id $PackageId
 
 Write-Output "> List Assets"
 $assets = @(Invoke-Sdcm preprod-submission assets --package-id $PackageId | ConvertFrom-Json)

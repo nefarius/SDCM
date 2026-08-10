@@ -24,8 +24,9 @@ internal sealed class HdcJsonRequestExecutor(HttpClient client, Guid correlation
 {
     private const string DefaultErrorCode = "InvalidInput";
 
-    private async Task<(DevCenterErrorDetails? Error, DevCenterTrace Trace)> InvokeHdcServiceCore(
-        HttpMethod method, string uri, object? input, Action<string>? processContent)
+    public async Task<(DevCenterErrorDetails? Error, DevCenterTrace Trace)> InvokeHdcServiceCore(
+        HttpMethod method, string uri, object? input, Action<string>? processContent,
+        CancellationToken cancellationToken = default)
     {
         string requestId = Guid.NewGuid().ToString();
         string json = JsonSerializer.Serialize(input ?? new object());
@@ -64,8 +65,8 @@ internal sealed class HdcJsonRequestExecutor(HttpClient client, Guid correlation
             request.Content = new StringContent(json, System.Text.Encoding.UTF8, "application/json");
         }
 
-        HttpResponseMessage response = await client.SendAsync(request).ConfigureAwait(false);
-        string body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+        using HttpResponseMessage response = await client.SendAsync(request, cancellationToken).ConfigureAwait(false);
+        string body = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
 
         if (response.IsSuccessStatusCode)
         {
@@ -130,7 +131,8 @@ internal sealed class HdcJsonRequestExecutor(HttpClient client, Guid correlation
     }
 
     public async Task<DevCenterResponse<TOutput>> InvokeHdcService<TOutput>(
-        HttpMethod method, string uri, object? input, bool isMany) where TOutput : IArtifact
+        HttpMethod method, string uri, object? input, bool isMany,
+        CancellationToken cancellationToken = default) where TOutput : IArtifact
     {
         DevCenterResponse<TOutput> response = new();
         (response.Error, DevCenterTrace trace) = await InvokeHdcServiceCore(method, uri, input, content =>
@@ -148,15 +150,16 @@ internal sealed class HdcJsonRequestExecutor(HttpClient client, Guid correlation
                     response.ReturnValue = [parsed];
                 }
             }
-        }).ConfigureAwait(false);
+        }, cancellationToken).ConfigureAwait(false);
 
         response.Trace = trace;
         return response;
     }
 
-    public Task<DevCenterResponse<TOutput>> HdcGet<TOutput>(string uri, bool isMany) where TOutput : IArtifact
+    public Task<DevCenterResponse<TOutput>> HdcGet<TOutput>(
+        string uri, bool isMany, CancellationToken cancellationToken = default) where TOutput : IArtifact
     {
-        return InvokeHdcService<TOutput>(HttpMethod.Get, uri, null, isMany);
+        return InvokeHdcService<TOutput>(HttpMethod.Get, uri, null, isMany, cancellationToken);
     }
 
     public Task<DevCenterResponse<TOutput>> HdcPost<TOutput>(string uri, object input) where TOutput : IArtifact
@@ -185,24 +188,27 @@ internal sealed class HdcJsonRequestExecutor(HttpClient client, Guid correlation
 
         lastCommand?.Invoke(new DevCenterErrorDetails { Trace = trace });
 
-        await using FileStream fileStream = File.OpenRead(filePath);
+        // Buffered (rather than streamed straight from disk) so the request body survives the
+        // AuthorizationHandler's retry-on-401 path, which resends the same HttpRequestMessage: a
+        // StreamContent over a FileStream would already be exhausted (position at EOF) on retry and
+        // upload zero bytes.
+        byte[] fileContent = await File.ReadAllBytesAsync(filePath).ConfigureAwait(false);
         using HttpRequestMessage request = new(HttpMethod.Put, uri);
         request.Headers.Add("MS-CorrelationId", correlationId.ToString());
         request.Headers.Add("MS-RequestId", requestId);
-        request.Content = new StreamContent(fileStream);
+        request.Content = new ByteArrayContent(fileContent);
         request.Content.Headers.ContentType = new MediaTypeHeaderValue("application/octet-stream");
 
-        HttpResponseMessage response = await client.SendAsync(request).ConfigureAwait(false);
+        using HttpResponseMessage response = await client.SendAsync(request).ConfigureAwait(false);
+        string body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
 
         if (response.IsSuccessStatusCode)
         {
-            string body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
             processContent?.Invoke(body);
             return (null, trace);
         }
 
-        string errorBody = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
-        return (ParseError(errorBody, response, trace), trace);
+        return (ParseError(body, response, trace), trace);
     }
 
     /// <summary>
@@ -233,9 +239,27 @@ internal sealed class HdcJsonRequestExecutor(HttpClient client, Guid correlation
 
         if (response.IsSuccessStatusCode)
         {
-            await using Stream source = await response.Content.ReadAsStreamAsync().ConfigureAwait(false);
-            await using FileStream destination = File.Create(outputFilePath);
-            await source.CopyToAsync(destination).ConfigureAwait(false);
+            string tempFilePath = outputFilePath + ".tmp" + Guid.NewGuid().ToString("N");
+            try
+            {
+                await using (Stream source = await response.Content.ReadAsStreamAsync().ConfigureAwait(false))
+                await using (FileStream destination = File.Create(tempFilePath))
+                {
+                    await source.CopyToAsync(destination).ConfigureAwait(false);
+                }
+
+                File.Move(tempFilePath, outputFilePath, overwrite: true);
+            }
+            catch
+            {
+                if (File.Exists(tempFilePath))
+                {
+                    File.Delete(tempFilePath);
+                }
+
+                throw;
+            }
+
             return null;
         }
 

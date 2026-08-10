@@ -183,7 +183,7 @@ public sealed class PreprodWaitHandler(IDevCenterHandlerFactory factory, IOutput
                     linkedCts.Token.ThrowIfCancellationRequested();
 
                     DevCenterResponse<PreprodPackage> response = await api
-                        .GetPreprodPackage(input.PackageId).ConfigureAwait(false);
+                        .GetPreprodPackage(input.PackageId, linkedCts.Token).ConfigureAwait(false);
                     if (response.Error != null)
                     {
                         return errors.Report(response.Error);

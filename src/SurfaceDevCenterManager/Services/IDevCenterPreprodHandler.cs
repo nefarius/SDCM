@@ -16,13 +16,18 @@ namespace SurfaceDevCenterManager.Services;
 ///     The <c>Microsoft.Devices.HardwareDevCenterManager</c> library has no support for these
 ///     endpoints, so sdcm implements them itself; see <see cref="DevCenterPreprodHandler" />.
 /// </summary>
-public interface IDevCenterPreprodHandler
+public interface IDevCenterPreprodHandler : IDisposable
 {
     /// <summary>Submits a package for preprod signing, creating a new in-progress preprod submission.</summary>
     Task<DevCenterResponse<PreprodPackage>> SubmitPreprodPackage(string packagePath);
 
-    /// <summary>Gets package metadata, including <c>signingStatus</c> and, once succeeded, its assets.</summary>
-    Task<DevCenterResponse<PreprodPackage>> GetPreprodPackage(string packageId);
+    /// <summary>
+    ///     Gets package metadata, including <c>signingStatus</c> and, once succeeded, its assets.
+    ///     Accepts a <paramref name="cancellationToken" /> so callers polling this (e.g. <c>wait</c>)
+    ///     can abandon an in-flight request instead of only being able to skip the next poll.
+    /// </summary>
+    Task<DevCenterResponse<PreprodPackage>> GetPreprodPackage(
+        string packageId, CancellationToken cancellationToken = default);
 
     /// <summary>Lists every available asset for a preprod package, or gets a single asset's metadata by id.</summary>
     Task<DevCenterResponse<PreprodPackageAsset>> GetPreprodPackageAssets(string packageId, string? assetId = null);

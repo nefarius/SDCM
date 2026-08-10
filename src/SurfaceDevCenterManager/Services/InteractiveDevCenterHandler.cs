@@ -127,13 +127,14 @@ public sealed class InteractiveDevCenterHandler : IDevCenterHandler, IDisposable
     {
         string url = _baseUrl + string.Format(
             ProductSubmissionCommitUrl, Uri.EscapeDataString(productId), Uri.EscapeDataString(submissionId));
-        DevCenterErrorDetails? error = await _executor
-            .InvokeHdcService(HttpMethod.Post, url, null, null).ConfigureAwait(false);
+        (DevCenterErrorDetails? error, DevCenterTrace trace) = await _executor
+            .InvokeHdcServiceCore(HttpMethod.Post, url, null, null).ConfigureAwait(false);
 
         DevCenterResponse<bool> result = new()
         {
             Error = error,
-            ReturnValue = [error == null]
+            ReturnValue = [error == null],
+            Trace = trace
         };
 
         if (error is { HttpErrorCode: (int)HttpStatusCode.BadGateway } &&
@@ -183,12 +184,13 @@ public sealed class InteractiveDevCenterHandler : IDevCenterHandler, IDisposable
     {
         string url = _baseUrl + string.Format(
             CreateMetaDataUrl, Uri.EscapeDataString(productId), Uri.EscapeDataString(submissionId));
-        DevCenterErrorDetails? error = await _executor
-            .InvokeHdcService(HttpMethod.Post, url, null, null).ConfigureAwait(false);
+        (DevCenterErrorDetails? error, DevCenterTrace trace) = await _executor
+            .InvokeHdcServiceCore(HttpMethod.Post, url, null, null).ConfigureAwait(false);
         return new DevCenterResponse<bool>
         {
             Error = error,
-            ReturnValue = [error == null]
+            ReturnValue = [error == null],
+            Trace = trace
         };
     }
 
@@ -200,12 +202,13 @@ public sealed class InteractiveDevCenterHandler : IDevCenterHandler, IDisposable
             Uri.EscapeDataString(productId),
             Uri.EscapeDataString(submissionId),
             Uri.EscapeDataString(shippingLabelId));
-        DevCenterErrorDetails? error = await _executor
-            .InvokeHdcService(HttpMethod.Put, url, null, null).ConfigureAwait(false);
+        (DevCenterErrorDetails? error, DevCenterTrace trace) = await _executor
+            .InvokeHdcServiceCore(HttpMethod.Put, url, null, null).ConfigureAwait(false);
         return new DevCenterResponse<bool>
         {
             Error = error,
-            ReturnValue = [error == null]
+            ReturnValue = [error == null],
+            Trace = trace
         };
     }
 

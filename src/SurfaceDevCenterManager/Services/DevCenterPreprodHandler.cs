@@ -54,10 +54,11 @@ public sealed class DevCenterPreprodHandler : IDevCenterPreprodHandler, IDisposa
         return response;
     }
 
-    public Task<DevCenterResponse<PreprodPackage>> GetPreprodPackage(string packageId)
+    public Task<DevCenterResponse<PreprodPackage>> GetPreprodPackage(
+        string packageId, CancellationToken cancellationToken = default)
     {
         string url = _baseUrl + string.Format(PackageUrl, Uri.EscapeDataString(packageId));
-        return _executor.HdcGet<PreprodPackage>(url, false);
+        return _executor.HdcGet<PreprodPackage>(url, false, cancellationToken);
     }
 
     public Task<DevCenterResponse<PreprodPackageAsset>> GetPreprodPackageAssets(
