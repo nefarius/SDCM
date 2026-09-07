@@ -6,6 +6,9 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <!-- Versioning (applied via Directory.Build.props) -->
+    <PackageVersion Include="MinVer" Version="8.0.0" />
+
     <!-- Hardware Dev Center API client -->
     <PackageVersion Include="Microsoft.Devices.HardwareDevCenterManager" Version="3.0.20" />
 

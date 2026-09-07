@@ -23,16 +23,8 @@
   <PropertyGroup>
     <!-- Package / assembly metadata (replaces AssemblyInfo.cs) -->
     <Product>Surface Dev Center Manager</Product>
-    <Authors>Nefarius Software Solutions e.U.;Microsoft</Authors>
-    <Company>Nefarius Software Solutions e.U.</Company>
-    <Copyright>Copyright (c) Microsoft Corporation and Contributors. All rights reserved.</Copyright>
     <Description>Command-line tool to automate Microsoft Hardware Dev Center (Partner Center) driver and firmware submissions. A modernized fork of microsoft/SDCM.</Description>
-    <PackageProjectUrl>https://github.com/nefarius/SDCM</PackageProjectUrl>
-    <RepositoryUrl>https://github.com/nefarius/SDCM</RepositoryUrl>
-    <PackageLicenseExpression>MIT</PackageLicenseExpression>
-    <PackageReadmeFile>README.md</PackageReadmeFile>
     <PackageTags>hardware;dev-center;partner-center;driver;whql;attestation;cli;dotnet-tool</PackageTags>
-    <Version>2.0.1</Version>
   </PropertyGroup>
 
   <ItemGroup>
@@ -52,8 +44,6 @@
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <Pack>false</Pack>
     </Content>
-    <None Include="..\..\README.md" Pack="true" PackagePath="\" />
-    <None Include="..\..\LICENSE" Pack="true" PackagePath="\" />
   </ItemGroup>
 
 </Project>

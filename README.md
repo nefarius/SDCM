@@ -1,4 +1,10 @@
-# Surface Dev Center Manager (SDCM)
+# <img src="assets/NSS-128x128.png" align="left" />Surface Dev Center Manager (SDCM)
+
+[![.NET](https://github.com/nefarius/SDCM/actions/workflows/build.yml/badge.svg)](https://github.com/nefarius/SDCM/actions/workflows/build.yml)
+![Requirements](https://img.shields.io/badge/Requires-.NET%2010.0-blue.svg)
+[![Nuget](https://img.shields.io/nuget/v/Nefarius.Tools.SDCM)](https://www.nuget.org/packages/Nefarius.Tools.SDCM/)
+[![Nuget](https://img.shields.io/nuget/dt/Nefarius.Tools.SDCM)](https://www.nuget.org/packages/Nefarius.Tools.SDCM/)
+[![Assisted by Cursor AI](https://img.shields.io/badge/Assisted%20by-Cursor%20AI-8B5CF6?style=flat)](https://cursor.com/)
 
 Surface Dev Center Manager (SDCM) is a .NET tool that automates common Microsoft Hardware Dev Center
 (Partner Center) tasks around driver and firmware submissions, using the
