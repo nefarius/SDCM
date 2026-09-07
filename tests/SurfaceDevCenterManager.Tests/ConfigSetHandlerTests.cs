@@ -105,6 +105,55 @@ public class ConfigSetHandlerTests
     }
 
     [Fact]
+    public async Task UnreadableExistingFile_ReturnsIoError()
+    {
+        using TempConfigFile temp = new();
+        File.WriteAllText(temp.Path, "{}");
+        using FileStream locked = new(temp.Path, FileMode.Open, FileAccess.ReadWrite, FileShare.None);
+        RecordingOutputWriter output = new();
+        ConfigSetHandler handler = new(output);
+
+        ExitCode exit = await handler.RunAsync(
+            new ConfigSetInput(temp.Path, "default", "tenant-1", null, null),
+            CancellationToken.None);
+
+        Assert.Equal(ExitCode.IoError, exit);
+        Assert.Contains(output.Errors, e => e.Contains("Failed to read", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task NullProfiles_TreatedAsEmpty()
+    {
+        using TempConfigFile temp = new();
+        File.WriteAllText(temp.Path, """{"profiles":null}""");
+        ConfigSetHandler handler = new(new RecordingOutputWriter());
+
+        ExitCode exit = await handler.RunAsync(
+            new ConfigSetInput(temp.Path, "default", "tenant-1", "client-1", null),
+            CancellationToken.None);
+
+        Assert.Equal(ExitCode.Success, exit);
+        AuthProfile profile = ReadProfile(temp.Path, "default");
+        Assert.Equal("tenant-1", profile.TenantId);
+        Assert.Equal("client-1", profile.ClientId);
+    }
+
+    [Fact]
+    public async Task NullProfileValue_IsNormalized()
+    {
+        using TempConfigFile temp = new();
+        File.WriteAllText(temp.Path, """{"profiles":{"default":null}}""");
+        ConfigSetHandler handler = new(new RecordingOutputWriter());
+
+        ExitCode exit = await handler.RunAsync(
+            new ConfigSetInput(temp.Path, "default", "tenant-1", null, null),
+            CancellationToken.None);
+
+        Assert.Equal(ExitCode.Success, exit);
+        Assert.Equal("tenant-1", ReadProfile(temp.Path, "default").TenantId);
+    }
+
+    [Fact]
     public async Task WritesUtf8WithoutBom()
     {
         using TempConfigFile temp = new();

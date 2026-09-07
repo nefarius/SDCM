@@ -14,7 +14,8 @@ see [Other credential types](#other-credential-types).
 
 1. Open
    [Partner Center User management](https://partner.microsoft.com/en-us/dashboard/account/v3/usermanagement)
-   and sign in with an Entra ID tenant account that has enough rights.
+   and sign in with an account that has the Partner Center **Manager** role and Microsoft Entra
+   **Global Administrator** permissions for the tenant.
 2. Click **Microsoft Entra applications**.
 3. Click **Add Microsoft Entra application**.
 4. In the **Add Microsoft Entra application** dialog, select **Create Microsoft Entra application**.
@@ -39,7 +40,14 @@ Key; take the Entra tenant GUID from the same app-details drawer or from the ten
 ## Write the profile with `sdcm config set`
 
 ```bash
-sdcm config set --tenant-id <tenant-guid> --client-id <client-guid> --key <partner-center-key>
+sdcm config set --tenant-id <tenant-guid> --client-id <client-guid> --key
+```
+
+`--key` is a flag: sdcm prompts on a TTY (input is not echoed) or reads one line from stdin if
+input is redirected. Do not pass the secret on the command line.
+
+```bash
+printf '%s\n' "$PARTNER_CENTER_KEY" | sdcm config set --tenant-id <tenant-guid> --client-id <client-guid> --key
 ```
 
 That creates or updates the `default` profile in `authconfig.json`. Use `--profile <name>` to write
@@ -48,7 +56,7 @@ a different profile, and `--config <path>` to target a specific file.
 To rotate only the key:
 
 ```bash
-sdcm config set --key <new-partner-center-key>
+sdcm config set --key
 ```
 
 `sdcm config set` writes UTF-8 without a BOM. It never prints the key; it reports the file path and
@@ -75,7 +83,8 @@ you would rather edit JSON by hand.
 Config is layered, each layer overriding the previous:
 
 1. `appsettings.json` (shipped with the tool) - non-secret HTTP/AAD defaults
-2. `authconfig.json` - your named credential profiles (gitignored, never packed into the tool)
+2. `authconfig.json` - named credential profiles; this file holds secrets and must be kept out of
+   source control (it is never packed into the tool)
 3. Environment variables prefixed `SDCM_` (double-underscore for nesting, e.g.
    `SDCM_PROFILES__DEFAULT__CLIENTID`)
 4. Command-line options

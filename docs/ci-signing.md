@@ -21,8 +21,9 @@ SDCM_PROFILES__DEFAULT__KEY
 With those set, `auto` selects client-secret. Pass `--auth client-secret` if you want a hard failure
 when `key` is missing instead of falling through to interactive.
 
-Alternatively, write a job-scoped `authconfig.json` with `sdcm config set --config ...` and pass
-that path as `--config`. Environment variables are the usual choice.
+Alternatively, write a job-scoped `authconfig.json` (`printf '%s\n' "$KEY" | sdcm config set --config
+... --tenant-id ... --client-id ... --key`) and pass that path as `--config`. Environment variables
+are the usual choice.
 
 sdcm does not hold or apply your [EV certificate](https://docs.microsoft.com/en-us/windows-hardware/drivers/dashboard/get-a-code-signing-certificate).
 The package you upload must already be EV-signed with the certificate registered on the Hardware
@@ -92,11 +93,6 @@ Map repository secrets onto the `SDCM_*` variables, install the tool, then run t
 timeout that fits the job:
 
 ```yaml
-env:
-  SDCM_PROFILES__DEFAULT__TENANTID: ${{ secrets.SDCM_TENANT_ID }}
-  SDCM_PROFILES__DEFAULT__CLIENTID: ${{ secrets.SDCM_CLIENT_ID }}
-  SDCM_PROFILES__DEFAULT__KEY: ${{ secrets.SDCM_KEY }}
-
 jobs:
   sign:
     runs-on: windows-latest
@@ -108,6 +104,10 @@ jobs:
           dotnet-version: '10.0.x'
       - run: dotnet tool install -g Nefarius.Tools.SDCM
       - name: Submit and wait
+        env:
+          SDCM_PROFILES__DEFAULT__TENANTID: ${{ secrets.SDCM_TENANT_ID }}
+          SDCM_PROFILES__DEFAULT__CLIENTID: ${{ secrets.SDCM_CLIENT_ID }}
+          SDCM_PROFILES__DEFAULT__KEY: ${{ secrets.SDCM_KEY }}
         run: |
           $submit = sdcm preprod-submission submit --package "${{ github.workspace }}\out\package.cab" --output json --auth client-secret
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

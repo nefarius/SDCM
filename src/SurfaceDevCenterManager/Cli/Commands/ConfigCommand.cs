@@ -38,19 +38,30 @@ internal static class ConfigCommand
 
         Option<string?> tenantId = Opt.OptionalStr("--tenant-id", "Entra tenant id");
         Option<string?> clientId = Opt.OptionalStr("--client-id", "Entra application (client) id");
-        Option<string?> key = Opt.OptionalStr("--key", "Partner Center API key (client secret)");
+        Option<bool> key = Opt.Flag("--key", "Set the Partner Center API key (prompt, or one line from stdin if redirected)");
         Command set = new("set", "Write tenantId, clientId, and/or key into an authconfig.json profile");
         set.Options.Add(tenantId);
         set.Options.Add(clientId);
         set.Options.Add(key);
         set.SetAction(async (parseResult, cancellationToken) =>
         {
+            string? keyValue = null;
+            if (parseResult.GetValue(key))
+            {
+                keyValue = SecretPrompt.ReadApiKey();
+                if (string.IsNullOrWhiteSpace(keyValue))
+                {
+                    await Console.Error.WriteLineAsync("No API key was provided.").ConfigureAwait(false);
+                    return (int)ExitCode.InvalidArguments;
+                }
+            }
+
             ConfigSetInput input = new(
                 parseResult.GetValue(GlobalOptions.Config),
                 parseResult.GetValue(GlobalOptions.Profile) ?? "default",
                 parseResult.GetValue(tenantId),
                 parseResult.GetValue(clientId),
-                parseResult.GetValue(key));
+                keyValue);
             ExitCode exitCode = await accessor.Provider.GetRequiredService<ConfigSetHandler>()
                 .RunAsync(input, cancellationToken).ConfigureAwait(false);
             return (int)exitCode;

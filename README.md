@@ -56,9 +56,12 @@ The preferred path is a Partner Center **API key** (the Key on a Microsoft Entra
 under User management). That key is sdcm's `--auth client-secret` profile `key`.
 
 ```bash
-sdcm config set --tenant-id <tenant-guid> --client-id <client-guid> --key <partner-center-key>
+sdcm config set --tenant-id <tenant-guid> --client-id <client-guid> --key
 sdcm product list
 ```
+
+`--key` prompts for the Partner Center secret (or reads one line from stdin). Do not put the key on
+the command line.
 
 Walkthrough, config layers, and the other auth modes:
 [docs/authentication.md](docs/authentication.md). `sdcm config path` shows which file was resolved.

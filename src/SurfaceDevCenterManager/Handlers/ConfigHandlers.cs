@@ -156,6 +156,11 @@ public sealed class ConfigSetHandler(IOutputWriter output)
                 output.Error($"'{path}' is not valid authconfig.json: {ex.Message}");
                 return Task.FromResult(ExitCode.InvalidArguments);
             }
+            catch (Exception ex) when (ex is UnauthorizedAccessException or IOException)
+            {
+                output.Error($"Failed to read '{path}': {ex.Message}");
+                return Task.FromResult(ExitCode.IoError);
+            }
         }
         else
         {
@@ -163,12 +168,12 @@ public sealed class ConfigSetHandler(IOutputWriter output)
         }
 
         Dictionary<string, AuthProfile> profiles = new(StringComparer.OrdinalIgnoreCase);
-        foreach (KeyValuePair<string, AuthProfile> pair in config.Profiles)
+        foreach (KeyValuePair<string, AuthProfile> pair in config.Profiles ?? [])
         {
-            profiles[pair.Key] = pair.Value;
+            profiles[pair.Key] = pair.Value ?? new AuthProfile();
         }
 
-        if (!profiles.TryGetValue(profileName, out AuthProfile? profile))
+        if (!profiles.TryGetValue(profileName, out AuthProfile? profile) || profile is null)
         {
             profile = new AuthProfile();
             profiles[profileName] = profile;
@@ -197,18 +202,7 @@ public sealed class ConfigSetHandler(IOutputWriter output)
 
         try
         {
-            string? directory = Path.GetDirectoryName(path);
-            if (directory != null)
-            {
-                Directory.CreateDirectory(directory);
-            }
-
-            File.WriteAllText(path, JsonSerializer.Serialize(config, JsonOptions), Utf8NoBom);
-
-            if (!OperatingSystem.IsWindows())
-            {
-                File.SetUnixFileMode(path, UnixFileMode.UserRead | UnixFileMode.UserWrite);
-            }
+            WriteAuthConfigAtomically(path, JsonSerializer.Serialize(config, JsonOptions));
         }
         catch (Exception ex) when (ex is UnauthorizedAccessException or IOException)
         {
@@ -224,5 +218,51 @@ public sealed class ConfigSetHandler(IOutputWriter output)
     private static string? Normalize(string? value)
     {
         return string.IsNullOrWhiteSpace(value) ? null : value;
+    }
+
+    /// <summary>
+    ///     Writes credentials to a same-directory temp file, then replaces <paramref name="path" />.
+    ///     On Unix the temp file is created 0600 so the secret is never world-readable.
+    /// </summary>
+    private static void WriteAuthConfigAtomically(string path, string json)
+    {
+        string directory = Path.GetDirectoryName(path) ?? Directory.GetCurrentDirectory();
+        Directory.CreateDirectory(directory);
+
+        string tempPath = Path.Combine(directory, $".authconfig.{Guid.NewGuid():N}.tmp");
+        try
+        {
+            FileStreamOptions options = new()
+            {
+                Mode = FileMode.CreateNew,
+                Access = FileAccess.Write,
+                Share = FileShare.None
+            };
+            if (!OperatingSystem.IsWindows())
+            {
+                options.UnixCreateMode = UnixFileMode.UserRead | UnixFileMode.UserWrite;
+            }
+
+            byte[] bytes = Utf8NoBom.GetBytes(json);
+            using (FileStream stream = new(tempPath, options))
+            {
+                stream.Write(bytes);
+                stream.Flush(true);
+            }
+
+            File.Move(tempPath, path, overwrite: true);
+        }
+        catch
+        {
+            try
+            {
+                File.Delete(tempPath);
+            }
+            catch (IOException)
+            {
+            }
+
+            throw;
+        }
     }
 }
