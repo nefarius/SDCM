@@ -20,7 +20,6 @@ packages, manage shipping labels to release drivers on Windows Update, and submi
 > goal here - see [Migrating from sdcm 1.x](#migrating-from-sdcm-1x) below if you're coming from the
 > upstream tool.
 
-<br/>
 
 ## Installation
 
@@ -43,7 +42,6 @@ dotnet sdcm --help
 
 To update: `dotnet tool update -g Nefarius.Tools.SDCM`.
 
-<br/>
 
 ## Setting up credentials
 
@@ -61,7 +59,6 @@ To update: `dotnet tool update -g Nefarius.Tools.SDCM`.
    - leave both blank to use `--auth interactive`, which opens a browser to sign in as a user
 4. Run `sdcm config path` any time to see exactly which file sdcm resolved.
 
-<br/>
 
 ## Configuration model
 
@@ -103,7 +100,6 @@ a starter file at the per-user location.
 
 Select a profile with `--profile <name>` (defaults to `default`).
 
-<br/>
 
 ## Authentication
 
@@ -127,7 +123,6 @@ or when `auto` falls back to it):
 | `refresh-session`        | Force a silent token refresh, then interactive forced login if that fails |
 | `select-account`         | Always show the account-selection prompt                         |
 
-<br/>
 
 ## Command reference
 
@@ -173,7 +168,6 @@ Global options, valid anywhere in the tree: `--profile`, `--auth`, `--aad`, `--c
 
 Run `sdcm <command> --help` (or `sdcm <noun> <verb> --help`) for the full option list of any command.
 
-<br/>
 
 ## Input file schema
 
@@ -258,7 +252,6 @@ A file still using the old `{"createType": ..., "createProduct"/"createSubmissio
 envelope from sdcm 1.x fails fast with an explicit message pointing back to this section, instead of
 a confusing null-reference deeper in the call stack.
 
-<br/>
 
 ## Basic operations
 
@@ -314,7 +307,6 @@ regexing human-readable text:
 $id = (sdcm product create --input product.json --output json | ConvertFrom-Json).id
 ```
 
-<br/>
 
 ## Exit codes
 
@@ -332,7 +324,6 @@ $id = (sdcm product create --input product.json --output json | ConvertFrom-Json
 | 9    | Canceled - Ctrl+C, or a `--wait-timeout` was exceeded                |
 | 10   | UnhandledException                                                    |
 
-<br/>
 
 ## Automation scripts
 
@@ -348,7 +339,6 @@ They use `--output json | ConvertFrom-Json` to pick up created ids and check `$L
 every invocation, so a failed step stops the script instead of silently continuing (a bug in the
 sdcm 1.x versions of these scripts).
 
-<br/>
 
 ## Migrating from sdcm 1.x
 
@@ -380,7 +370,6 @@ Also new:
 - `ErrorCodes` (48 negative values) was replaced by ten positive [exit codes](#exit-codes).
 - `-v` used to be dead code; it now actually raises the log level.
 
-<br/>
 
 ## Contributing
 
