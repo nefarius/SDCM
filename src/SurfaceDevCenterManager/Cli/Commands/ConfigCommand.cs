@@ -36,9 +36,30 @@ internal static class ConfigCommand
             return (int)exitCode;
         });
 
-        Command config = new("config", "Inspect and initialize sdcm's configuration");
+        Option<string?> tenantId = Opt.OptionalStr("--tenant-id", "Entra tenant id");
+        Option<string?> clientId = Opt.OptionalStr("--client-id", "Entra application (client) id");
+        Option<string?> key = Opt.OptionalStr("--key", "Partner Center API key (client secret)");
+        Command set = new("set", "Write tenantId, clientId, and/or key into an authconfig.json profile");
+        set.Options.Add(tenantId);
+        set.Options.Add(clientId);
+        set.Options.Add(key);
+        set.SetAction(async (parseResult, cancellationToken) =>
+        {
+            ConfigSetInput input = new(
+                parseResult.GetValue(GlobalOptions.Config),
+                parseResult.GetValue(GlobalOptions.Profile) ?? "default",
+                parseResult.GetValue(tenantId),
+                parseResult.GetValue(clientId),
+                parseResult.GetValue(key));
+            ExitCode exitCode = await accessor.Provider.GetRequiredService<ConfigSetHandler>()
+                .RunAsync(input, cancellationToken).ConfigureAwait(false);
+            return (int)exitCode;
+        });
+
+        Command config = new("config", "Inspect, initialize, and update sdcm's configuration");
         config.Subcommands.Add(path);
         config.Subcommands.Add(init);
+        config.Subcommands.Add(set);
         return config;
     }
 }

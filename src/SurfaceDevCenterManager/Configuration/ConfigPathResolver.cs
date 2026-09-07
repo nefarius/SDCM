@@ -42,6 +42,21 @@ public static class ConfigPathResolver
     }
 
     /// <summary>
+    ///     Path <c>sdcm config set</c> should write: an explicit <c>--config</c> (even if the file
+    ///     does not exist yet), otherwise the first existing probe candidate, otherwise the per-user
+    ///     path that <c>config init</c> uses.
+    /// </summary>
+    public static string ResolveWriteTarget(string? explicitPath)
+    {
+        if (!string.IsNullOrWhiteSpace(explicitPath))
+        {
+            return Path.GetFullPath(explicitPath);
+        }
+
+        return Resolve(null) ?? GetUserConfigPath();
+    }
+
+    /// <summary>
     ///     Returns every location that is probed, in priority order, whether or not each exists.
     ///     Used by <c>sdcm config path</c> to show the user exactly where sdcm is looking.
     /// </summary>

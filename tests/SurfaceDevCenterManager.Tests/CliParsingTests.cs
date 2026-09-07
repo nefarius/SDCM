@@ -44,6 +44,9 @@ public class CliParsingTests
     [InlineData("audience list")]
     [InlineData("config path")]
     [InlineData("config init")]
+    [InlineData("config set")]
+    [InlineData("config set --tenant-id t --client-id c --key k")]
+    [InlineData("config set --key k --profile ci")]
     public void ValidCommandLines_ParseWithoutErrors(string commandLine)
     {
         RootCommand root = BuildTree();

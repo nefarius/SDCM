@@ -4,6 +4,9 @@
     Licensed under the MIT license. See LICENSE file in the project root for full license information.
 --*/
 
+using System.Text;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using SurfaceDevCenterManager.Configuration;
 using SurfaceDevCenterManager.Services;
 
@@ -99,4 +102,127 @@ public sealed class ConfigInitHandler(IOutputWriter output)
           }
         }
         """;
+}
+
+public sealed record ConfigSetInput(
+    string? ExplicitConfigPath,
+    string ProfileName,
+    string? TenantId,
+    string? ClientId,
+    string? Key);
+
+/// <summary>
+///     Creates or merges tenantId/clientId/key on a named profile in authconfig.json. Never prints
+///     the key value; only reports the path and which fields were written.
+/// </summary>
+public sealed class ConfigSetHandler(IOutputWriter output)
+{
+    private static readonly JsonSerializerOptions JsonOptions = new()
+    {
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+        PropertyNameCaseInsensitive = true,
+        WriteIndented = true,
+        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
+    };
+
+    private static readonly UTF8Encoding Utf8NoBom = new(encoderShouldEmitUTF8Identifier: false);
+
+    public Task<ExitCode> RunAsync(ConfigSetInput input, CancellationToken cancellationToken)
+    {
+        string? tenantId = Normalize(input.TenantId);
+        string? clientId = Normalize(input.ClientId);
+        string? key = Normalize(input.Key);
+
+        if (tenantId == null && clientId == null && key == null)
+        {
+            output.Error("Specify at least one of --tenant-id, --client-id, or --key.");
+            return Task.FromResult(ExitCode.InvalidArguments);
+        }
+
+        string profileName = string.IsNullOrWhiteSpace(input.ProfileName) ? "default" : input.ProfileName;
+        string path = ConfigPathResolver.ResolveWriteTarget(input.ExplicitConfigPath);
+
+        AuthConfigEntry config;
+        if (File.Exists(path))
+        {
+            try
+            {
+                string existing = File.ReadAllText(path);
+                AuthConfigEntry? parsed = JsonSerializer.Deserialize<AuthConfigEntry>(existing, JsonOptions);
+                config = parsed ?? new AuthConfigEntry();
+            }
+            catch (JsonException ex)
+            {
+                output.Error($"'{path}' is not valid authconfig.json: {ex.Message}");
+                return Task.FromResult(ExitCode.InvalidArguments);
+            }
+        }
+        else
+        {
+            config = new AuthConfigEntry();
+        }
+
+        Dictionary<string, AuthProfile> profiles = new(StringComparer.OrdinalIgnoreCase);
+        foreach (KeyValuePair<string, AuthProfile> pair in config.Profiles)
+        {
+            profiles[pair.Key] = pair.Value;
+        }
+
+        if (!profiles.TryGetValue(profileName, out AuthProfile? profile))
+        {
+            profile = new AuthProfile();
+            profiles[profileName] = profile;
+        }
+
+        List<string> updated = [];
+        if (tenantId != null)
+        {
+            profile.TenantId = tenantId;
+            updated.Add("tenantId");
+        }
+
+        if (clientId != null)
+        {
+            profile.ClientId = clientId;
+            updated.Add("clientId");
+        }
+
+        if (key != null)
+        {
+            profile.Key = key;
+            updated.Add("key");
+        }
+
+        config.Profiles = profiles;
+
+        try
+        {
+            string? directory = Path.GetDirectoryName(path);
+            if (directory != null)
+            {
+                Directory.CreateDirectory(directory);
+            }
+
+            File.WriteAllText(path, JsonSerializer.Serialize(config, JsonOptions), Utf8NoBom);
+
+            if (!OperatingSystem.IsWindows())
+            {
+                File.SetUnixFileMode(path, UnixFileMode.UserRead | UnixFileMode.UserWrite);
+            }
+        }
+        catch (Exception ex) when (ex is UnauthorizedAccessException or IOException)
+        {
+            output.Error($"Failed to write '{path}': {ex.Message}");
+            return Task.FromResult(ExitCode.IoError);
+        }
+
+        output.Progress($"Saved profile '{profileName}' to '{path}'.");
+        output.Progress($"Updated fields: {string.Join(", ", updated)}.");
+        return Task.FromResult(ExitCode.Success);
+    }
+
+    private static string? Normalize(string? value)
+    {
+        return string.IsNullOrWhiteSpace(value) ? null : value;
+    }
 }

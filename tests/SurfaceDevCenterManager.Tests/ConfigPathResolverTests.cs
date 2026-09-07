@@ -73,6 +73,16 @@ public class ConfigPathResolverTests
     }
 
     [Fact]
+    public void ResolveWriteTarget_ExplicitPath_ReturnedEvenWhenMissing()
+    {
+        string nonexistent = Path.Combine(Path.GetTempPath(), $"does-not-exist-{Guid.NewGuid():N}.json");
+
+        string target = ConfigPathResolver.ResolveWriteTarget(nonexistent);
+
+        Assert.Equal(Path.GetFullPath(nonexistent), target);
+    }
+
+    [Fact]
     public void GetUserConfigPath_EndsWithSdcmAuthconfig()
     {
         string path = ConfigPathResolver.GetUserConfigPath();

@@ -43,85 +43,25 @@ dotnet sdcm --help
 To update: `dotnet tool update -g Nefarius.Tools.SDCM`.
 
 
+## Documentation
+
+- [Authentication](docs/authentication.md) - Partner Center API key (preferred), `sdcm config set`,
+  config discovery, `--auth` / `--aad`
+- [Submit and wait from CI](docs/ci-signing.md) - non-interactive submit, wait, and download
+
+
 ## Setting up credentials
 
-1. Follow the steps in [Associate an Azure AD application with your Windows Dev Center account](https://docs.microsoft.com/en-us/windows-hardware/drivers/dashboard/dashboard-api#associate-an-azure-ad-application-with-your-windows-dev-center-account)
-   to register an Azure AD application and grant it access to your Hardware Dev Center account.
-   - If you intend to use `--auth interactive`, add `http://localhost` as a redirect URI on the app
-     registration (System.CommandLine/MSAL's interactive flow uses a loopback listener).
-2. Run `sdcm config init` to write a starter `authconfig.json` into your per-user config directory.
-3. Edit the generated file's `default` profile:
-   - `tenantId` / `clientId` - from your app registration
-   - `key` - a client secret, if you'll use `--auth client-secret` (the default `auto` chain picks
-     this automatically when set)
-   - `managedIdentityClientId` - a user-assigned managed identity's client id, if running on Azure
-     with `--auth managed-identity`
-   - leave both blank to use `--auth interactive`, which opens a browser to sign in as a user
-4. Run `sdcm config path` any time to see exactly which file sdcm resolved.
+The preferred path is a Partner Center **API key** (the Key on a Microsoft Entra application created
+under User management). That key is sdcm's `--auth client-secret` profile `key`.
 
-
-## Configuration model
-
-Config is layered, each layer overriding the previous:
-
-1. `appsettings.json` (shipped with the tool) - non-secret HTTP/AAD defaults
-2. `authconfig.json` - your named credential profiles (gitignored, never packed into the tool)
-3. Environment variables prefixed `SDCM_` (double-underscore for nesting, e.g.
-   `SDCM_PROFILES__DEFAULT__CLIENTID`)
-4. Command-line options
-
-`authconfig.json` is probed for, in order (first match wins):
-
-1. An explicit `--config <path>`
-2. The current working directory
-3. The per-user config directory: `%APPDATA%\sdcm` on Windows, `$XDG_CONFIG_HOME/sdcm` (or
-   `~/.config/sdcm`) elsewhere
-4. The tool's own installation directory (for copy-deployed/self-contained builds)
-
-Run `sdcm config path` to see this chain resolved for your machine, and `sdcm config init` to create
-a starter file at the per-user location.
-
-`authconfig.json` uses named profiles instead of the ordinal array sdcm 1.x used:
-
-```json
-{
-  "profiles": {
-    "default": {
-      "tenantId": "00000000-0000-0000-0000-000000000000",
-      "clientId": "00000000-0000-0000-0000-000000000000",
-      "key": null,
-      "managedIdentityClientId": null,
-      "url": "https://manage.devcenter.microsoft.com",
-      "urlPrefix": "v2.0/my"
-    }
-  }
-}
+```bash
+sdcm config set --tenant-id <tenant-guid> --client-id <client-guid> --key <partner-center-key>
+sdcm product list
 ```
 
-Select a profile with `--profile <name>` (defaults to `default`).
-
-
-## Authentication
-
-`--auth` selects the credential type:
-
-| Value              | Behavior                                                                |
-|--------------------|--------------------------------------------------------------------------|
-| `auto` (default)   | Picks `managed-identity` if `managedIdentityClientId` is set, else `client-secret` if `key` is set, else `interactive` |
-| `managed-identity` | Azure managed identity (requires `managedIdentityClientId` in the profile) |
-| `client-secret`    | Azure AD app + client secret (requires `key` in the profile)             |
-| `interactive`      | Interactive browser sign-in via MSAL, cached for reuse between runs      |
-
-`--aad` controls how aggressively interactive sign-in prompts (only relevant with `--auth interactive`
-or when `auto` falls back to it):
-
-| Value                    | Behavior                                                       |
-|--------------------------|------------------------------------------------------------------|
-| `never` (default)        | Silent/cached only; fails if nothing is cached                   |
-| `prompt`                 | Silent first, then an interactive account-selection prompt       |
-| `always`                 | Always interactive, forcing login                                |
-| `refresh-session`        | Force a silent token refresh, then interactive forced login if that fails |
-| `select-account`         | Always show the account-selection prompt                         |
+Walkthrough, config layers, and the other auth modes:
+[docs/authentication.md](docs/authentication.md). `sdcm config path` shows which file was resolved.
 
 
 ## Command reference
@@ -159,7 +99,8 @@ sdcm
 ├─ audience list
 └─ config
    ├─ path
-   └─ init                [--force]
+   ├─ init                [--force]
+   └─ set                 [--tenant-id] [--client-id] [--key]
 ```
 
 Global options, valid anywhere in the tree: `--profile`, `--auth`, `--aad`, `--config`, `--timeout`
@@ -327,17 +268,13 @@ $id = (sdcm product create --input product.json --output json | ConvertFrom-Json
 
 ## Automation scripts
 
-The `Scripts/` folder has ready-made end-to-end scripts, updated for the new CLI and requiring
-`sdcm` to be installed and on `PATH`:
+End-to-end local scripts (`sdcm` must be on `PATH`). For CI submit/wait/download, see
+[docs/ci-signing.md](docs/ci-signing.md).
 
 - [`Scripts/HLKx.ps1`](Scripts/HLKx.ps1) - WHQL-sign a driver from a signed HLKx package
 - [`Scripts/Attestation.ps1`](Scripts/Attestation.ps1) - Attestation-sign a driver package
 - [`Scripts/ShippingLabel.ps1`](Scripts/ShippingLabel.ps1) - create and wait on a shipping label
 - [`Scripts/Preprod.ps1`](Scripts/Preprod.ps1) - get a package signed for preproduction testing
-
-They use `--output json | ConvertFrom-Json` to pick up created ids and check `$LASTEXITCODE` after
-every invocation, so a failed step stops the script instead of silently continuing (a bug in the
-sdcm 1.x versions of these scripts).
 
 
 ## Migrating from sdcm 1.x
@@ -366,7 +303,7 @@ Also new:
   [Input file schema](#input-file-schema).
 - `authconfig.json` moved from an ordinal array to named `profiles`, and now lives in a per-user
   config directory by default rather than next to the executable - see
-  [Configuration model](#configuration-model).
+  [Authentication](docs/authentication.md#configuration-model).
 - `ErrorCodes` (48 negative values) was replaced by ten positive [exit codes](#exit-codes).
 - `-v` used to be dead code; it now actually raises the log level.
 
