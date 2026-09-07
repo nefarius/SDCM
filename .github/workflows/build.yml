@@ -39,7 +39,10 @@ jobs:
         run: dotnet test SurfaceDevCenterManager.slnx -c Release --no-build --verbosity normal
 
       - name: Vulnerability scan
-        run: dotnet list SurfaceDevCenterManager.slnx package --vulnerable --include-transitive 2>&1 | tee vuln.txt && ! grep -q "has the following vulnerable packages" vuln.txt
+        run: |
+          set -euo pipefail
+          dotnet list SurfaceDevCenterManager.slnx package --vulnerable --include-transitive 2>&1 | tee vuln.txt
+          ! grep -q "has the following vulnerable packages" vuln.txt
 
       - name: Pack
         run: dotnet pack src/SurfaceDevCenterManager/SurfaceDevCenterManager.csproj -c Release --no-build -o ./artifacts/nuget

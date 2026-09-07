@@ -32,6 +32,12 @@ jobs:
       - name: Test
         run: dotnet test SurfaceDevCenterManager.slnx -c Release --no-build --verbosity normal
 
+      - name: Vulnerability scan
+        run: |
+          set -euo pipefail
+          dotnet list SurfaceDevCenterManager.slnx package --vulnerable --include-transitive 2>&1 | tee vuln.txt
+          ! grep -q "has the following vulnerable packages" vuln.txt
+
       - name: Modify README.md for NuGet
         run: |
           sed -i 's/# <img[^>]*>/# /' README.md

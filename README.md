@@ -1,4 +1,4 @@
-# <img src="assets/NSS-128x128.png" align="left" />Surface Dev Center Manager (SDCM)
+# <img src="assets/NSS-128x128.png" align="left" alt="Nefarius Software Solutions logo" />Surface Dev Center Manager (SDCM)
 
 [![.NET](https://github.com/nefarius/SDCM/actions/workflows/build.yml/badge.svg)](https://github.com/nefarius/SDCM/actions/workflows/build.yml)
 ![Requirements](https://img.shields.io/badge/Requires-.NET%2010.0-blue.svg)
