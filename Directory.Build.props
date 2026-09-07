@@ -1,0 +1,34 @@
+<Project>
+  <PropertyGroup>
+    <!-- Copyright / ownership -->
+    <Authors>Nefarius Software Solutions e.U.;Microsoft</Authors>
+    <Company>Nefarius Software Solutions e.U.</Company>
+    <Copyright>Copyright (c) Microsoft Corporation and Contributors. All rights reserved.</Copyright>
+
+    <!-- Shared package metadata -->
+    <PackageIcon>NSS-128x128.png</PackageIcon>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageProjectUrl>https://github.com/nefarius/SDCM</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/nefarius/SDCM</RepositoryUrl>
+
+    <!-- Symbols + source link -->
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+    <PublishRepositoryUrl>true</PublishRepositoryUrl>
+
+    <!-- Versioning via git tags (prefix v, e.g. v2.0.1) -->
+    <MinVerTagPrefix>v</MinVerTagPrefix>
+    <MinVerMinimumMajorMinor>2.0</MinVerMinimumMajorMinor>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="$(MSBuildThisFileDirectory)assets\NSS-128x128.png" Pack="true" PackagePath="\" />
+    <None Include="$(MSBuildThisFileDirectory)README.md" Pack="true" PackagePath="\" />
+    <None Include="$(MSBuildThisFileDirectory)LICENSE" Pack="true" PackagePath="\" />
+    <PackageReference Include="MinVer">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+  </ItemGroup>
+</Project>

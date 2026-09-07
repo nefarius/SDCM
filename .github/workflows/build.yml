@@ -1,0 +1,54 @@
+name: Build
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: build-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          global-json-file: global.json
+
+      - name: Restore
+        run: dotnet restore SurfaceDevCenterManager.slnx
+
+      - name: Build
+        run: dotnet build SurfaceDevCenterManager.slnx -c Release --no-restore
+
+      - name: Test
+        run: dotnet test SurfaceDevCenterManager.slnx -c Release --no-build --verbosity normal
+
+      - name: Vulnerability scan
+        run: |
+          set -euo pipefail
+          dotnet list SurfaceDevCenterManager.slnx package --vulnerable --include-transitive 2>&1 | tee vuln.txt
+          ! grep -q "has the following vulnerable packages" vuln.txt
+
+      - name: Pack
+        run: dotnet pack src/SurfaceDevCenterManager/SurfaceDevCenterManager.csproj -c Release --no-build -o ./artifacts/nuget
+
+      - name: Upload nupkg artifact
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: sdcm-nupkg
+          path: ./artifacts/nuget/*
