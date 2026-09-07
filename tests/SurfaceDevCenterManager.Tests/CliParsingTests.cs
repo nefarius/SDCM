@@ -44,6 +44,9 @@ public class CliParsingTests
     [InlineData("audience list")]
     [InlineData("config path")]
     [InlineData("config init")]
+    [InlineData("config set")]
+    [InlineData("config set --tenant-id t --client-id c --key")]
+    [InlineData("config set --key --profile ci")]
     public void ValidCommandLines_ParseWithoutErrors(string commandLine)
     {
         RootCommand root = BuildTree();
@@ -62,6 +65,7 @@ public class CliParsingTests
     [InlineData("preprod-submission download --package-id 1 --asset-id 2")] // missing --output-file
     [InlineData("shipping-label wait --product-id 1 --submission-id 2")] // missing --shipping-label-id
     [InlineData("partner-submission list --product-id 1 --submission-id 2")] // missing --publisher-id
+    [InlineData("config set --key secret")] // --key is a flag; the secret must not be a CLI argument
     public void MissingRequiredOptions_ProduceParseErrors(string commandLine)
     {
         RootCommand root = BuildTree();

@@ -45,6 +45,7 @@ internal static class ServiceCollectionExtensions
         services.AddTransient<AudienceListHandler>();
         services.AddTransient<ConfigPathHandler>();
         services.AddTransient<ConfigInitHandler>();
+        services.AddTransient<ConfigSetHandler>();
 
         return services;
     }
