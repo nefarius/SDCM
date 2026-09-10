@@ -13,7 +13,7 @@
     <PackageVersion Include="Microsoft.Devices.HardwareDevCenterManager" Version="3.0.20" />
 
     <!-- CLI -->
-    <PackageVersion Include="System.CommandLine" Version="2.0.10" />
+    <PackageVersion Include="System.CommandLine" Version="2.0.12" />
 
     <!-- Hosting / DI / configuration -->
     <PackageVersion Include="Microsoft.Extensions.Hosting" Version="10.0.10" />
