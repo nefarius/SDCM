@@ -1,0 +1,61 @@
+{
+  "products": [
+    {
+      "id": "1001",
+      "productName": "ReplayAttestation",
+      "testHarness": "Attestation"
+    }
+  ],
+  "submissions": [
+    {
+      "id": "2002",
+      "productId": "1001",
+      "name": "ReplayAttestation_Submission",
+      "type": "initial",
+      "commitStatus": "commitPending",
+      "workflowStatus": {
+        "currentStep": "packageInfoValidation",
+        "state": "notStarted"
+      },
+      "downloads": [
+        {
+          "type": "initialPackage",
+          "url": "https://replay.invalid/initial"
+        }
+      ],
+      "polls": [
+        {
+          "commitStatus": "commitComplete",
+          "workflowStatus": {
+            "currentStep": "scanning",
+            "state": "completed"
+          }
+        },
+        {
+          "commitStatus": "commitComplete",
+          "workflowStatus": {
+            "currentStep": "finalizeIngestion",
+            "state": "completed"
+          },
+          "downloads": [
+            {
+              "type": "initialPackage",
+              "url": "https://replay.invalid/initial"
+            },
+            {
+              "type": "signedPackage",
+              "url": "https://replay.invalid/signed"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "blobs": {
+    "https://replay.invalid/initial": { "text": "initial-package" },
+    "https://replay.invalid/signed": { "text": "signed-package" }
+  },
+  "errorReports": {
+    "https://replay.invalid/errors/demo": "Validation failed: replay fixture"
+  }
+}

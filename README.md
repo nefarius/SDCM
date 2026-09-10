@@ -48,6 +48,7 @@ To update: `dotnet tool update -g Nefarius.Tools.SDCM`.
 - [Authentication](docs/authentication.md) - Partner Center API key (preferred), `sdcm config set`,
   config discovery, `--auth` / `--aad`
 - [Submit and wait from CI](docs/ci-signing.md) - non-interactive submit, wait, and download
+- [Submission states](docs/submission-states.md) - `commitStatus`, `state` vs `currentStep`, downloads
 
 
 ## Setting up credentials
@@ -73,23 +74,29 @@ Walkthrough, config layers, and the other auth modes:
 sdcm
 ├─ product
 │  ├─ create              --input <file>
-│  └─ list                [--product-id <id>]
+│  ├─ list                [--product-id <id>]   (id form deprecated; prefer get)
+│  └─ get                 --product-id <id>
 ├─ submission
 │  ├─ create              --product-id --input <file>
-│  ├─ list                --product-id [--submission-id]
-│  ├─ commit              --product-id --submission-id
+│  ├─ list                --product-id <id> [--submission-id <id>]   (id form deprecated)
+│  ├─ get                 --product-id --submission-id
+│  ├─ status              --product-id --submission-id
+│  ├─ commit              --product-id --submission-id     (idempotent)
 │  ├─ upload              --product-id --submission-id --package <path>
 │  ├─ download            --product-id --submission-id --output-file <path>
+│  │                      [--overwrite]
 │  ├─ wait                --product-id --submission-id [--wait-metadata]
 │  │                      [--poll-interval <sec>] [--wait-timeout <sec>]
 │  └─ metadata
 │     ├─ download         --product-id --submission-id --output-file <path>
+│     │                   [--overwrite]
 │     └─ create           --product-id --submission-id
 ├─ preprod-submission
 │  ├─ submit              --package <path>
 │  ├─ status              --package-id <id>
 │  ├─ assets              --package-id <id> [--asset-id <id>]
 │  ├─ download            --package-id <id> --asset-id <id> --output-file <path>
+│  │                      [--overwrite]
 │  └─ wait                --package-id <id> [--poll-interval <sec>] [--wait-timeout <sec>]
 ├─ shipping-label
 │  ├─ create              --product-id --submission-id --input <file> [--partner-id]
@@ -107,8 +114,9 @@ sdcm
 ```
 
 Global options, valid anywhere in the tree: `--profile`, `--auth`, `--aad`, `--config`, `--timeout`
-(HTTP timeout in seconds, default 300), `--output text|json` (default `text`), and `-v`/`--verbose`
-(diagnostic logging on stderr).
+(HTTP timeout in seconds, default 300), `--output text|json` (default `text`), `-v`/`--verbose`
+(diagnostic logging on stderr), and `--replay <fixtures.json>` (or `SDCM_REPLAY`) for an offline
+fake backend. See [Submission states](docs/submission-states.md).
 
 Run `sdcm <command> --help` (or `sdcm <noun> <verb> --help`) for the full option list of any command.
 
@@ -208,7 +216,7 @@ sdcm product create --input product.json
 Get it back by id, or list every product:
 
 ```bash
-sdcm product list --product-id 12345
+sdcm product get --product-id 12345
 sdcm product list
 ```
 
@@ -216,7 +224,8 @@ Create and inspect a submission:
 
 ```bash
 sdcm submission create --product-id 12345 --input submission.json
-sdcm submission list --product-id 12345 --submission-id 67890
+sdcm submission get --product-id 12345 --submission-id 67890
+sdcm submission status --product-id 12345 --submission-id 67890
 ```
 
 Upload the package (must be signed by the [Extended Validation Certificate (EV Cert)](https://docs.microsoft.com/en-us/windows-hardware/drivers/dashboard/get-a-code-signing-certificate)

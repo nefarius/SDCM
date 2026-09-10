@@ -6,13 +6,15 @@
 
 using Microsoft.Extensions.DependencyInjection;
 using SurfaceDevCenterManager.Handlers;
+using SurfaceDevCenterManager.Replay;
 using SurfaceDevCenterManager.Services;
 
 namespace SurfaceDevCenterManager.Cli;
 
 internal static class ServiceCollectionExtensions
 {
-    public static IServiceCollection AddSdcmServices(this IServiceCollection services, OutputFormat outputFormat)
+    public static IServiceCollection AddSdcmServices(
+        this IServiceCollection services, OutputFormat outputFormat, ReplayStore? replayStore = null)
     {
         services.AddSingleton(new ConsoleOutputWriter(outputFormat));
         services.AddSingleton<IOutputWriter>(sp => sp.GetRequiredService<ConsoleOutputWriter>());
@@ -20,12 +22,28 @@ internal static class ServiceCollectionExtensions
         services.AddSingleton<IErrorReporter, ErrorReporter>();
         services.AddSingleton<ICredentialsProvider, CredentialsProvider>();
         services.AddSingleton<IAadTokenProvider, MsalAadTokenProvider>();
-        services.AddSingleton<IDevCenterHandlerFactory, DevCenterHandlerFactory>();
+
+        if (replayStore != null)
+        {
+            services.AddSingleton(replayStore);
+            services.AddSingleton<IBlobTransfer>(replayStore);
+            services.AddSingleton<IErrorReportFetcher>(replayStore);
+            services.AddSingleton<IDevCenterHandlerFactory>(replayStore);
+        }
+        else
+        {
+            services.AddSingleton<IBlobTransfer, AzureBlobTransfer>();
+            services.AddSingleton<IErrorReportFetcher, HttpErrorReportFetcher>();
+            services.AddSingleton<IDevCenterHandlerFactory, DevCenterHandlerFactory>();
+        }
 
         services.AddTransient<ProductCreateHandler>();
         services.AddTransient<ProductListHandler>();
+        services.AddTransient<ProductGetHandler>();
         services.AddTransient<SubmissionCreateHandler>();
         services.AddTransient<SubmissionListHandler>();
+        services.AddTransient<SubmissionGetHandler>();
+        services.AddTransient<SubmissionStatusHandler>();
         services.AddTransient<SubmissionCommitHandler>();
         services.AddTransient<SubmissionUploadHandler>();
         services.AddTransient<SubmissionDownloadHandler>();

@@ -65,6 +65,11 @@ public sealed class ProductListHandler(IDevCenterHandlerFactory factory, IOutput
         {
             try
             {
+                if (!string.IsNullOrEmpty(input.ProductId))
+                {
+                    output.Error("product list --product-id is deprecated; use 'product get'.");
+                }
+
                 DevCenterResponse<Product> response = await api.GetProducts(input.ProductId).ConfigureAwait(false);
                 if (response.Error != null)
                 {
@@ -77,6 +82,38 @@ public sealed class ProductListHandler(IDevCenterHandlerFactory factory, IOutput
             catch (Exception ex)
             {
                 return errors.ReportException(ex, "product list");
+            }
+        }, cancellationToken);
+    }
+}
+
+public sealed record ProductGetInput(string ProductId, GlobalInvocationOptions Global);
+
+public sealed class ProductGetHandler(IDevCenterHandlerFactory factory, IOutputWriter output, IErrorReporter errors)
+{
+    public async Task<ExitCode> RunAsync(ProductGetInput input, CancellationToken cancellationToken)
+    {
+        return await factory.UseAsync(input.Global, output, async api =>
+        {
+            try
+            {
+                DevCenterResponse<Product> response = await api.GetProducts(input.ProductId).ConfigureAwait(false);
+                if (response.Error != null)
+                {
+                    return errors.Report(response.Error);
+                }
+
+                if (!response.TryGetSingle(output, out Product product))
+                {
+                    return ExitCode.InvalidState;
+                }
+
+                output.Result(product, p => p.Dump());
+                return ExitCode.Success;
+            }
+            catch (Exception ex)
+            {
+                return errors.ReportException(ex, "product get");
             }
         }, cancellationToken);
     }

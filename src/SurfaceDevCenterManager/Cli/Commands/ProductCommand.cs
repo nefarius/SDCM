@@ -22,17 +22,27 @@ internal static class ProductCommand
             (pr, global) => new ProductCreateInput(pr.Required(input), global),
             (sp, i, ct) => sp.GetRequiredService<ProductCreateHandler>().RunAsync(i, ct));
 
-        Option<string?> productId = Opt.OptionalStr("--product-id", "Product id to fetch; omit to list every product");
-        Command list = new("list", "List products, or get one by id");
-        list.Options.Add(productId);
+        Option<string?> listProductId = Opt.OptionalStr("--product-id",
+            "Deprecated: still returns a one-element array. Prefer 'product get'.");
+        Command list = new("list", "List every product");
+        list.Options.Add(listProductId);
         list.SetHandlerAction(
             accessor,
-            (pr, global) => new ProductListInput(pr.GetValue(productId), global),
+            (pr, global) => new ProductListInput(pr.GetValue(listProductId), global),
             (sp, i, ct) => sp.GetRequiredService<ProductListHandler>().RunAsync(i, ct));
+
+        Option<string> getProductId = Opt.Str("--product-id", "Product id to fetch", true);
+        Command get = new("get", "Get a single product by id");
+        get.Options.Add(getProductId);
+        get.SetHandlerAction(
+            accessor,
+            (pr, global) => new ProductGetInput(pr.Required(getProductId), global),
+            (sp, i, ct) => sp.GetRequiredService<ProductGetHandler>().RunAsync(i, ct));
 
         Command product = new("product", "Manage Hardware Dev Center products");
         product.Subcommands.Add(create);
         product.Subcommands.Add(list);
+        product.Subcommands.Add(get);
         return product;
     }
 }

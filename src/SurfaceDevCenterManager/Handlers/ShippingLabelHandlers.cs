@@ -142,13 +142,12 @@ public sealed class ShippingLabelWaitHandler(
                         await status.Dump().ConfigureAwait(false);
                     }
 
-                    bool failed = status.IsFailed();
-                    bool terminal = status.IsTerminal();
-
-                    if (terminal)
+                    if (ShippingLabelReadiness.IsWaitDone(shippingLabel))
                     {
                         output.Result(shippingLabel, s => s.Dump());
-                        return failed ? ExitCode.WorkflowFailed : ExitCode.Success;
+                        return ShippingLabelReadiness.IsFailed(shippingLabel)
+                            ? ExitCode.WorkflowFailed
+                            : ExitCode.Success;
                     }
 
                     await Task.Delay(TimeSpan.FromSeconds(PollingDefaults.ClampPollInterval(input.PollIntervalSeconds)), linkedCts.Token)

@@ -63,6 +63,12 @@ internal static class GlobalOptions
         Recursive = true
     };
 
+    public static readonly Option<string?> Replay = new("--replay")
+    {
+        Description = "Offline fixture file (also SDCM_REPLAY). Skips credentials and talks to a fake backend.",
+        Recursive = true
+    };
+
     public static void AddTo(RootCommand rootCommand)
     {
         rootCommand.Options.Add(Profile);
@@ -72,5 +78,6 @@ internal static class GlobalOptions
         rootCommand.Options.Add(Timeout);
         rootCommand.Options.Add(Output);
         rootCommand.Options.Add(Verbose);
+        rootCommand.Options.Add(Replay);
     }
 }
