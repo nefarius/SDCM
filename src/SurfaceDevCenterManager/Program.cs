@@ -36,6 +36,18 @@ if (!EnumParsing.TryParseKebab(parseResult.GetValue(GlobalOptions.Output), out o
     return (int)ExitCode.InvalidArguments;
 }
 
+string? replayPath = parseResult.GetValue(GlobalOptions.Replay);
+if (string.IsNullOrWhiteSpace(replayPath))
+{
+    replayPath = Environment.GetEnvironmentVariable("SDCM_REPLAY");
+}
+
+if (!string.IsNullOrWhiteSpace(replayPath) && !File.Exists(replayPath))
+{
+    await Console.Error.WriteLineAsync($"Replay fixture not found: {replayPath}");
+    return (int)ExitCode.IoError;
+}
+
 string? authConfigPath = ConfigPathResolver.Resolve(explicitConfigPath);
 
 HostApplicationBuilder builder = Host.CreateApplicationBuilder();
@@ -63,7 +75,7 @@ builder.Logging.AddFilter(null, verbose ? LogLevel.Debug : LogLevel.Warning);
 
 builder.Services.Configure<DevCenterAppOptions>(builder.Configuration.GetSection(DevCenterAppOptions.SectionName));
 builder.Services.Configure<AuthConfigEntry>(builder.Configuration);
-builder.Services.AddSdcmServices(outputFormat);
+builder.Services.AddSdcmServices(outputFormat, replayPath);
 
 using IHost host = builder.Build();
 accessor.Provider = host.Services;

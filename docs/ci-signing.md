@@ -42,6 +42,18 @@ account.
 Always pass `--output json` and fail the job on a non-zero exit. `--wait-timeout` should be shorter
 than the CI job's own timeout so a stuck submission fails the step instead of hanging the runner.
 
+Ids come back as **quoted strings** (`"1152921504621441944"`). The REST API returns numbers; the
+client library's `LongToStringJsonConverter` re-serializes them as strings. Parse with `jq -r .id`
+or PowerShell `ConvertFrom-Json` — do not regex a digit run out of the document.
+
+`submission list` and `product list` always emit a **JSON array**, even when you pass
+`--submission-id` / `--product-id` (those flags are deprecated). Use `submission get` and
+`product get` for a single object.
+
+Every `product create` consumes a Partner Center product. Do not create a new one to resume or
+debug; see [Resume an in-flight submission](#resume-an-in-flight-submission). The state machine
+itself is documented in [Submission states](submission-states.md).
+
 
 ## Attestation / WHQL
 
@@ -57,16 +69,64 @@ submissionId=$(echo "$submission" | jq -r .id)
 sdcm submission upload --product-id "$productId" --submission-id "$submissionId" --package "$PACKAGE" --auth client-secret
 sdcm submission commit --product-id "$productId" --submission-id "$submissionId" --auth client-secret
 sdcm submission wait --product-id "$productId" --submission-id "$submissionId" --wait-timeout 3600 --auth client-secret
-sdcm submission download --product-id "$productId" --submission-id "$submissionId" --output-file signed.zip --auth client-secret
+sdcm submission download --product-id "$productId" --submission-id "$submissionId" --output-file signed.zip --overwrite --auth client-secret
 ```
+
+`upload`, `commit`, `download`, and `metadata create` emit a small JSON result in `--output json`
+(they used to print nothing). `submission wait` succeeds only when a `signedPackage` is present or
+`finalizeIngestion` is `completed` — not when an intermediate step reports `state: completed`.
 
 `--wait-timeout` is seconds. Add `--wait-metadata` if you also need publisher metadata to be ready
 before the wait returns.
 
-The same sequence, already scripted for a local PowerShell 7 shell:
+The same sequence, already scripted for a local PowerShell 7 shell (status-aware and resumable):
 
 - [Scripts/Attestation.ps1](../Scripts/Attestation.ps1)
 - [Scripts/HLKx.ps1](../Scripts/HLKx.ps1)
+
+
+## Resume an in-flight submission
+
+If a job dies after `product create`, do not create another product. Re-run with the existing ids:
+
+```bash
+status=$(sdcm submission status --product-id "$productId" --submission-id "$submissionId" --output json --auth client-secret)
+progress=$(echo "$status" | jq -r .progress)
+
+case "$progress" in
+  created)
+    sdcm submission upload --product-id "$productId" --submission-id "$submissionId" --package "$PACKAGE" --auth client-secret
+    sdcm submission commit --product-id "$productId" --submission-id "$submissionId" --auth client-secret
+    ;&
+  processing)
+    sdcm submission wait --product-id "$productId" --submission-id "$submissionId" --wait-timeout 3600 --auth client-secret
+    ;&
+  completed)
+    sdcm submission download --product-id "$productId" --submission-id "$submissionId" --output-file signed.zip --overwrite --auth client-secret
+    ;;
+  failed)
+    echo "submission failed; see errorReportContent" >&2
+    exit 7
+    ;;
+esac
+```
+
+`submission commit` is safe to retry. `submission upload` is refused once `commitStatus` is no
+longer `commitPending`.
+
+
+## Offline replay
+
+To dry-run a pipeline without credentials or a Partner Center product:
+
+```bash
+sdcm --replay docs/examples/replay-attestation.json --output json product create --input product.json
+# or: set SDCM_REPLAY=docs/examples/replay-attestation.json
+```
+
+The fixture is the same fake backend the handler tests use. `polls` on a submission are returned
+in order by each `GetSubmission`, so `submission wait` can walk `scanning/completed` → signed
+package without hitting the service.
 
 
 ## Preproduction signing

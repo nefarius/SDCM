@@ -46,14 +46,17 @@ internal static class PreprodSubmissionCommand
         // download
         Option<string> downloadAssetId = Opt.Str("--asset-id", "Asset id to download", true);
         Option<string> downloadOutputFile = Opt.Str("--output-file", "Destination file path for the downloaded asset", true);
+        Option<bool> downloadOverwrite = Opt.Flag("--overwrite", "Replace the destination file if it already exists");
         Command download = new("download", "Download a preprod package's signed asset");
         download.Options.Add(packageId);
         download.Options.Add(downloadAssetId);
         download.Options.Add(downloadOutputFile);
+        download.Options.Add(downloadOverwrite);
         download.SetHandlerAction(
             accessor,
             (pr, global) => new PreprodDownloadInput(
-                pr.Required(packageId), pr.Required(downloadAssetId), pr.Required(downloadOutputFile), global),
+                pr.Required(packageId), pr.Required(downloadAssetId), pr.Required(downloadOutputFile),
+                pr.GetValue(downloadOverwrite), global),
             (sp, i, ct) => sp.GetRequiredService<PreprodDownloadHandler>().RunAsync(i, ct));
 
         // wait

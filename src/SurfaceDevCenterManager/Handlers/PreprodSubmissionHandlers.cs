@@ -113,24 +113,17 @@ public sealed class PreprodAssetsHandler(IDevCenterHandlerFactory factory, IOutp
 }
 
 public sealed record PreprodDownloadInput(
-    string PackageId, string AssetId, string OutputFile, GlobalInvocationOptions Global);
+    string PackageId, string AssetId, string OutputFile, bool Overwrite, GlobalInvocationOptions Global);
 
 public sealed class PreprodDownloadHandler(
     IDevCenterHandlerFactory factory, IOutputWriter output, IErrorReporter errors)
 {
     public async Task<ExitCode> RunAsync(PreprodDownloadInput input, CancellationToken cancellationToken)
     {
-        if (File.Exists(input.OutputFile))
+        ExitCode prepared = DownloadPath.Prepare(input.OutputFile, input.Overwrite, output);
+        if (prepared != ExitCode.Success)
         {
-            output.Error($"Destination already exists: {input.OutputFile}");
-            return ExitCode.IoError;
-        }
-
-        string? directory = Path.GetDirectoryName(Path.GetFullPath(input.OutputFile));
-        if (directory != null && !Directory.Exists(directory))
-        {
-            output.Error($"Destination directory does not exist: {directory}");
-            return ExitCode.IoError;
+            return prepared;
         }
 
         return await factory.UsePreprodAsync(input.Global, output, async api =>
@@ -146,7 +139,20 @@ public sealed class PreprodDownloadHandler(
                     return errors.Report(error);
                 }
 
+                DownloadResult result = new()
+                {
+                    PackageId = input.PackageId,
+                    AssetId = input.AssetId,
+                    OutputFile = input.OutputFile,
+                    Type = "preprodAsset"
+                };
                 output.Progress("Download complete.");
+                output.Result(result, r =>
+                {
+                    Console.WriteLine($"outputFile: {r.OutputFile}");
+                    Console.WriteLine($"packageId: {r.PackageId}");
+                    Console.WriteLine($"assetId: {r.AssetId}");
+                });
                 return ExitCode.Success;
             }
             catch (Exception ex)

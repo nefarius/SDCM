@@ -22,19 +22,25 @@ public class CliParsingTests
     [InlineData("product create --input file.json")]
     [InlineData("product list")]
     [InlineData("product list --product-id 42")]
+    [InlineData("product get --product-id 42")]
     [InlineData("submission create --product-id 1 --input file.json")]
     [InlineData("submission list --product-id 1")]
+    [InlineData("submission get --product-id 1 --submission-id 2")]
+    [InlineData("submission status --product-id 1 --submission-id 2")]
     [InlineData("submission commit --product-id 1 --submission-id 2")]
     [InlineData("submission upload --product-id 1 --submission-id 2 --package pkg.zip")]
     [InlineData("submission download --product-id 1 --submission-id 2 --output-file out.zip")]
+    [InlineData("submission download --product-id 1 --submission-id 2 --output-file out.zip --overwrite")]
     [InlineData("submission wait --product-id 1 --submission-id 2")]
     [InlineData("submission metadata create --product-id 1 --submission-id 2")]
-    [InlineData("submission metadata download --product-id 1 --submission-id 2 --output-file meta.zip")]
+    [InlineData("submission metadata download --product-id 1 --submission-id 2 --output-file meta.zip --overwrite")]
+    [InlineData("--replay fixtures.json submission status --product-id 1 --submission-id 2")]
     [InlineData("preprod-submission submit --package pkg.cab")]
     [InlineData("preprod-submission status --package-id 1")]
     [InlineData("preprod-submission assets --package-id 1")]
     [InlineData("preprod-submission assets --package-id 1 --asset-id 2")]
     [InlineData("preprod-submission download --package-id 1 --asset-id 2 --output-file signed.zip")]
+    [InlineData("preprod-submission download --package-id 1 --asset-id 2 --output-file signed.zip --overwrite")]
     [InlineData("preprod-submission wait --package-id 1")]
     [InlineData("shipping-label create --product-id 1 --submission-id 2 --input file.json")]
     [InlineData("shipping-label list --product-id 1 --submission-id 2")]
@@ -58,6 +64,8 @@ public class CliParsingTests
     [Theory]
     [InlineData("product create")] // missing --input
     [InlineData("submission create --product-id 1")] // missing --input
+    [InlineData("submission get --product-id 1")] // missing --submission-id
+    [InlineData("product get")] // missing --product-id
     [InlineData("submission commit --product-id 1")] // missing --submission-id
     [InlineData("submission upload --product-id 1 --submission-id 2")] // missing --package
     [InlineData("preprod-submission submit")] // missing --package

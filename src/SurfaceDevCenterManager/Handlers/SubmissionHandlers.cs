@@ -5,9 +5,9 @@
 --*/
 
 using Microsoft.Devices.HardwareDevCenterManager.DevCenterApi;
-using Microsoft.Devices.HardwareDevCenterManager.Utility;
 using SurfaceDevCenterManager.Cli;
 using SurfaceDevCenterManager.Json;
+using SurfaceDevCenterManager.Models;
 using SurfaceDevCenterManager.Services;
 
 namespace SurfaceDevCenterManager.Handlers;
@@ -67,6 +67,11 @@ public sealed class SubmissionListHandler(IDevCenterHandlerFactory factory, IOut
         {
             try
             {
+                if (!string.IsNullOrEmpty(input.SubmissionId))
+                {
+                    output.Error("submission list --submission-id is deprecated; use 'submission get'.");
+                }
+
                 DevCenterResponse<Submission> response = await api
                     .GetSubmission(input.ProductId, input.SubmissionId).ConfigureAwait(false);
                 if (response.Error != null)
@@ -85,6 +90,80 @@ public sealed class SubmissionListHandler(IDevCenterHandlerFactory factory, IOut
     }
 }
 
+public sealed record SubmissionGetInput(string ProductId, string SubmissionId, GlobalInvocationOptions Global);
+
+public sealed class SubmissionGetHandler(
+    IDevCenterHandlerFactory factory, IOutputWriter output, IErrorReporter errors, IErrorReportFetcher errorReports)
+{
+    public async Task<ExitCode> RunAsync(SubmissionGetInput input, CancellationToken cancellationToken)
+    {
+        return await factory.UseAsync(input.Global, output, async api =>
+        {
+            try
+            {
+                DevCenterResponse<Submission> response = await api
+                    .GetSubmission(input.ProductId, input.SubmissionId).ConfigureAwait(false);
+                if (response.Error != null)
+                {
+                    return errors.Report(response.Error);
+                }
+
+                if (!response.TryGetSingle(output, out Submission submission))
+                {
+                    return ExitCode.InvalidState;
+                }
+
+                object model = output.Format == OutputFormat.Json
+                    ? await WorkflowJson.SubmissionWithErrorReportAsync(submission, errorReports, cancellationToken)
+                        .ConfigureAwait(false)
+                    : submission;
+                output.Result(model, _ => submission.Dump());
+                return ExitCode.Success;
+            }
+            catch (Exception ex)
+            {
+                return errors.ReportException(ex, "submission get");
+            }
+        }, cancellationToken);
+    }
+}
+
+public sealed record SubmissionStatusInput(string ProductId, string SubmissionId, GlobalInvocationOptions Global);
+
+public sealed class SubmissionStatusHandler(
+    IDevCenterHandlerFactory factory, IOutputWriter output, IErrorReporter errors, IErrorReportFetcher errorReports)
+{
+    public async Task<ExitCode> RunAsync(SubmissionStatusInput input, CancellationToken cancellationToken)
+    {
+        return await factory.UseAsync(input.Global, output, async api =>
+        {
+            try
+            {
+                DevCenterResponse<Submission> response = await api
+                    .GetSubmission(input.ProductId, input.SubmissionId).ConfigureAwait(false);
+                if (response.Error != null)
+                {
+                    return errors.Report(response.Error);
+                }
+
+                if (!response.TryGetSingle(output, out Submission submission))
+                {
+                    return ExitCode.InvalidState;
+                }
+
+                SubmissionStatusDocument status = await WorkflowJson
+                    .StatusAsync(submission, errorReports, cancellationToken).ConfigureAwait(false);
+                output.Result(status, WorkflowJson.DumpStatus);
+                return SubmissionReadiness.IsFailed(submission) ? ExitCode.WorkflowFailed : ExitCode.Success;
+            }
+            catch (Exception ex)
+            {
+                return errors.ReportException(ex, "submission status");
+            }
+        }, cancellationToken);
+    }
+}
+
 public sealed record SubmissionCommitInput(string ProductId, string SubmissionId, GlobalInvocationOptions Global);
 
 public sealed class SubmissionCommitHandler(
@@ -97,21 +176,76 @@ public sealed class SubmissionCommitHandler(
             output.Progress($"Committing submission {input.SubmissionId}...");
             try
             {
+                if (await TryAlreadyCommittedAsync(api, input, alreadyCommitted: true).ConfigureAwait(false) is { } before)
+                {
+                    return before;
+                }
+
                 DevCenterResponse<bool> response = await api
                     .CommitSubmission(input.ProductId, input.SubmissionId).ConfigureAwait(false);
                 if (response.Error != null)
                 {
+                    if (await TryAlreadyCommittedAsync(api, input, alreadyCommitted: true).ConfigureAwait(false) is { } after)
+                    {
+                        return after;
+                    }
+
                     return errors.Report(response.Error);
                 }
 
-                output.Progress("Commit accepted.");
-                return ExitCode.Success;
+                return EmitCommit(input, commitStatus: CommitStatuses.Complete, alreadyCommitted: false);
             }
             catch (Exception ex)
             {
+                if (await TryAlreadyCommittedAsync(api, input, alreadyCommitted: true).ConfigureAwait(false) is { } afterEx)
+                {
+                    return afterEx;
+                }
+
                 return errors.ReportException(ex, "submission commit");
             }
         }, cancellationToken);
+    }
+
+    private async Task<ExitCode?> TryAlreadyCommittedAsync(
+        IDevCenterHandler api, SubmissionCommitInput input, bool alreadyCommitted)
+    {
+        try
+        {
+            DevCenterResponse<Submission> status = await api
+                .GetSubmission(input.ProductId, input.SubmissionId).ConfigureAwait(false);
+            if (status.Error == null && status.ReturnValue is { Count: > 0 } &&
+                CommitStatuses.IsComplete(status.ReturnValue[0].CommitStatus))
+            {
+                return EmitCommit(input, status.ReturnValue[0].CommitStatus, alreadyCommitted);
+            }
+        }
+        catch (Exception)
+        {
+            // Fall through to the original commit error path.
+        }
+
+        return null;
+    }
+
+    private ExitCode EmitCommit(SubmissionCommitInput input, string? commitStatus, bool alreadyCommitted)
+    {
+        CommitResult result = new()
+        {
+            ProductId = input.ProductId,
+            SubmissionId = input.SubmissionId,
+            CommitStatus = commitStatus,
+            AlreadyCommitted = alreadyCommitted
+        };
+        output.Progress(alreadyCommitted ? "Submission was already committed." : "Commit accepted.");
+        output.Result(result, r =>
+        {
+            Console.WriteLine($"productId: {r.ProductId}");
+            Console.WriteLine($"submissionId: {r.SubmissionId}");
+            Console.WriteLine($"commitStatus: {r.CommitStatus}");
+            Console.WriteLine($"alreadyCommitted: {r.AlreadyCommitted}");
+        });
+        return ExitCode.Success;
     }
 }
 
@@ -119,7 +253,7 @@ public sealed record SubmissionUploadInput(
     string ProductId, string SubmissionId, string PackagePath, GlobalInvocationOptions Global);
 
 public sealed class SubmissionUploadHandler(
-    IDevCenterHandlerFactory factory, IOutputWriter output, IErrorReporter errors)
+    IDevCenterHandlerFactory factory, IOutputWriter output, IErrorReporter errors, IBlobTransfer blobs)
 {
     public async Task<ExitCode> RunAsync(SubmissionUploadInput input, CancellationToken cancellationToken)
     {
@@ -145,8 +279,17 @@ public sealed class SubmissionUploadHandler(
                     return ExitCode.InvalidState;
                 }
 
+                if (!CommitStatuses.IsPending(submission.CommitStatus))
+                {
+                    output.Error(
+                        $"Cannot upload: commitStatus is '{submission.CommitStatus ?? "(none)"}' " +
+                        $"(expected {CommitStatuses.Pending}).");
+                    return ExitCode.InvalidState;
+                }
+
                 Download.Item? uploadTarget = submission.Downloads?.Items?
-                    .FirstOrDefault(i => string.Equals(i.Type, "initialPackage", StringComparison.OrdinalIgnoreCase));
+                    .FirstOrDefault(i => string.Equals(i.Type, SubmissionReadiness.InitialPackage,
+                        StringComparison.OrdinalIgnoreCase));
 
                 if (uploadTarget?.Url is null)
                 {
@@ -155,9 +298,20 @@ public sealed class SubmissionUploadHandler(
                 }
 
                 output.Progress($"Uploading '{input.PackagePath}'...");
-                BlobStorageHandler blob = new(uploadTarget.Url.ToString());
-                await blob.Upload(input.PackagePath).ConfigureAwait(false);
+                await blobs.UploadAsync(uploadTarget.Url, input.PackagePath, cancellationToken).ConfigureAwait(false);
+                UploadResult result = new()
+                {
+                    ProductId = input.ProductId,
+                    SubmissionId = input.SubmissionId,
+                    PackagePath = input.PackagePath
+                };
                 output.Progress("Upload complete.");
+                output.Result(result, r =>
+                {
+                    Console.WriteLine($"productId: {r.ProductId}");
+                    Console.WriteLine($"submissionId: {r.SubmissionId}");
+                    Console.WriteLine($"packagePath: {r.PackagePath}");
+                });
                 return ExitCode.Success;
             }
             catch (Exception ex)
@@ -169,24 +323,17 @@ public sealed class SubmissionUploadHandler(
 }
 
 public sealed record SubmissionDownloadInput(
-    string ProductId, string SubmissionId, string OutputFile, GlobalInvocationOptions Global);
+    string ProductId, string SubmissionId, string OutputFile, bool Overwrite, GlobalInvocationOptions Global);
 
 public sealed class SubmissionDownloadHandler(
-    IDevCenterHandlerFactory factory, IOutputWriter output, IErrorReporter errors)
+    IDevCenterHandlerFactory factory, IOutputWriter output, IErrorReporter errors, IBlobTransfer blobs)
 {
     public async Task<ExitCode> RunAsync(SubmissionDownloadInput input, CancellationToken cancellationToken)
     {
-        if (File.Exists(input.OutputFile))
+        ExitCode prepared = DownloadPath.Prepare(input.OutputFile, input.Overwrite, output);
+        if (prepared != ExitCode.Success)
         {
-            output.Error($"Destination already exists: {input.OutputFile}");
-            return ExitCode.IoError;
-        }
-
-        string? directory = Path.GetDirectoryName(Path.GetFullPath(input.OutputFile));
-        if (directory != null && !Directory.Exists(directory))
-        {
-            output.Error($"Destination directory does not exist: {directory}");
-            return ExitCode.IoError;
+            return prepared;
         }
 
         return await factory.UseAsync(input.Global, output, async api =>
@@ -206,7 +353,8 @@ public sealed class SubmissionDownloadHandler(
                 }
 
                 Download.Item? downloadTarget = submission.Downloads?.Items?
-                    .FirstOrDefault(i => string.Equals(i.Type, "signedPackage", StringComparison.OrdinalIgnoreCase));
+                    .FirstOrDefault(i => string.Equals(i.Type, SubmissionReadiness.SignedPackage,
+                        StringComparison.OrdinalIgnoreCase));
 
                 if (downloadTarget?.Url is null)
                 {
@@ -215,9 +363,21 @@ public sealed class SubmissionDownloadHandler(
                 }
 
                 output.Progress($"Downloading to '{input.OutputFile}'...");
-                BlobStorageHandler blob = new(downloadTarget.Url.ToString());
-                await blob.Download(input.OutputFile).ConfigureAwait(false);
+                await blobs.DownloadAsync(downloadTarget.Url, input.OutputFile, cancellationToken)
+                    .ConfigureAwait(false);
+                DownloadResult result = new()
+                {
+                    ProductId = input.ProductId,
+                    SubmissionId = input.SubmissionId,
+                    OutputFile = input.OutputFile,
+                    Type = SubmissionReadiness.SignedPackage
+                };
                 output.Progress("Download complete.");
+                output.Result(result, r =>
+                {
+                    Console.WriteLine($"outputFile: {r.OutputFile}");
+                    Console.WriteLine($"type: {r.Type}");
+                });
                 return ExitCode.Success;
             }
             catch (Exception ex)
@@ -229,24 +389,17 @@ public sealed class SubmissionDownloadHandler(
 }
 
 public sealed record SubmissionMetadataDownloadInput(
-    string ProductId, string SubmissionId, string OutputFile, GlobalInvocationOptions Global);
+    string ProductId, string SubmissionId, string OutputFile, bool Overwrite, GlobalInvocationOptions Global);
 
 public sealed class SubmissionMetadataDownloadHandler(
-    IDevCenterHandlerFactory factory, IOutputWriter output, IErrorReporter errors)
+    IDevCenterHandlerFactory factory, IOutputWriter output, IErrorReporter errors, IBlobTransfer blobs)
 {
     public async Task<ExitCode> RunAsync(SubmissionMetadataDownloadInput input, CancellationToken cancellationToken)
     {
-        if (File.Exists(input.OutputFile))
+        ExitCode prepared = DownloadPath.Prepare(input.OutputFile, input.Overwrite, output);
+        if (prepared != ExitCode.Success)
         {
-            output.Error($"Destination already exists: {input.OutputFile}");
-            return ExitCode.IoError;
-        }
-
-        string? metadataDestinationDirectory = Path.GetDirectoryName(Path.GetFullPath(input.OutputFile));
-        if (metadataDestinationDirectory != null && !Directory.Exists(metadataDestinationDirectory))
-        {
-            output.Error($"Destination directory does not exist: {metadataDestinationDirectory}");
-            return ExitCode.IoError;
+            return prepared;
         }
 
         return await factory.UseAsync(input.Global, output, async api =>
@@ -266,7 +419,8 @@ public sealed class SubmissionMetadataDownloadHandler(
                 }
 
                 Download.Item? metadataTarget = submission.Downloads?.Items?
-                    .FirstOrDefault(i => string.Equals(i.Type, "driverMetadata", StringComparison.OrdinalIgnoreCase));
+                    .FirstOrDefault(i => string.Equals(i.Type, SubmissionReadiness.DriverMetadata,
+                        StringComparison.OrdinalIgnoreCase));
 
                 if (metadataTarget?.Url is null)
                 {
@@ -275,9 +429,21 @@ public sealed class SubmissionMetadataDownloadHandler(
                 }
 
                 output.Progress($"Downloading publisher metadata to '{input.OutputFile}'...");
-                BlobStorageHandler blob = new(metadataTarget.Url.ToString());
-                await blob.Download(input.OutputFile).ConfigureAwait(false);
+                await blobs.DownloadAsync(metadataTarget.Url, input.OutputFile, cancellationToken)
+                    .ConfigureAwait(false);
+                DownloadResult result = new()
+                {
+                    ProductId = input.ProductId,
+                    SubmissionId = input.SubmissionId,
+                    OutputFile = input.OutputFile,
+                    Type = SubmissionReadiness.DriverMetadata
+                };
                 output.Progress("Download complete.");
+                output.Result(result, r =>
+                {
+                    Console.WriteLine($"outputFile: {r.OutputFile}");
+                    Console.WriteLine($"type: {r.Type}");
+                });
                 return ExitCode.Success;
             }
             catch (Exception ex)
@@ -307,7 +473,18 @@ public sealed class SubmissionMetadataCreateHandler(
                     return errors.Report(response.Error);
                 }
 
+                MetadataCreateResult result = new()
+                {
+                    ProductId = input.ProductId,
+                    SubmissionId = input.SubmissionId
+                };
                 output.Progress("Metadata generation requested; poll 'submission metadata download' once ready.");
+                output.Result(result, r =>
+                {
+                    Console.WriteLine($"productId: {r.ProductId}");
+                    Console.WriteLine($"submissionId: {r.SubmissionId}");
+                    Console.WriteLine("requested: True");
+                });
                 return ExitCode.Success;
             }
             catch (Exception ex)
@@ -326,7 +503,8 @@ public sealed record SubmissionWaitInput(
     uint? WaitTimeoutSeconds,
     GlobalInvocationOptions Global);
 
-public sealed class SubmissionWaitHandler(IDevCenterHandlerFactory factory, IOutputWriter output, IErrorReporter errors)
+public sealed class SubmissionWaitHandler(
+    IDevCenterHandlerFactory factory, IOutputWriter output, IErrorReporter errors, IErrorReportFetcher errorReports)
 {
     public async Task<ExitCode> RunAsync(SubmissionWaitInput input, CancellationToken cancellationToken)
     {
@@ -364,26 +542,25 @@ public sealed class SubmissionWaitHandler(IDevCenterHandlerFactory factory, IOut
                         await status.Dump().ConfigureAwait(false);
                     }
 
-                    bool metadataReady = !input.WaitMetadata || submission.Downloads?.Items?.Any(
-                        i => string.Equals(i.Type, "driverMetadata", StringComparison.OrdinalIgnoreCase)) == true;
-
-                    bool commitFailed = string.Equals(submission.CommitStatus, "commitFailed", StringComparison.OrdinalIgnoreCase);
-                    bool failed = status.IsFailed() || commitFailed;
-                    bool terminal = failed || status.IsTerminal();
-
-                    if (terminal && metadataReady)
+                    if (SubmissionReadiness.IsWaitDone(submission, input.WaitMetadata))
                     {
-                        output.Result(submission, s => s.Dump());
+                        bool failed = SubmissionReadiness.IsFailed(submission);
+                        object model = output.Format == OutputFormat.Json
+                            ? await WorkflowJson.SubmissionWithErrorReportAsync(
+                                submission, errorReports, linkedCts.Token).ConfigureAwait(false)
+                            : submission;
+                        output.Result(model, _ => submission.Dump());
                         return failed ? ExitCode.WorkflowFailed : ExitCode.Success;
                     }
 
-                    await Task.Delay(TimeSpan.FromSeconds(PollingDefaults.ClampPollInterval(input.PollIntervalSeconds)), linkedCts.Token)
+                    await Task.Delay(TimeSpan.FromSeconds(PollingDefaults.ClampPollInterval(input.PollIntervalSeconds)),
+                            linkedCts.Token)
                         .ConfigureAwait(false);
                 }
             }
             catch (OperationCanceledException) when (timeoutCts?.IsCancellationRequested == true)
             {
-                output.Error($"Timed out after {input.WaitTimeoutSeconds}s waiting for the submission to reach a terminal state.");
+                output.Error($"Timed out after {input.WaitTimeoutSeconds}s waiting for the submission to become ready (signedPackage or finalizeIngestion completed).");
                 return ExitCode.Canceled;
             }
             catch (OperationCanceledException)

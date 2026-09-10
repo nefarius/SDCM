@@ -44,7 +44,7 @@ internal static class ShippingLabelCommand
         Option<string> waitShippingLabelId = Opt.Str("--shipping-label-id", "Shipping label id to wait on", true);
         Option<uint> pollInterval = Opt.UInt("--poll-interval", "Seconds between status checks", 5);
         Option<uint?> waitTimeout = new("--wait-timeout") { Description = "Give up after this many seconds (default: wait indefinitely)" };
-        Command wait = new("wait", "Wait for a shipping label to reach a terminal workflow state");
+        Command wait = new("wait", "Wait until the shipping label is published (or failed). Intermediate 'completed' steps are not success.");
         wait.Options.Add(productId);
         wait.Options.Add(submissionId);
         wait.Options.Add(waitShippingLabelId);
