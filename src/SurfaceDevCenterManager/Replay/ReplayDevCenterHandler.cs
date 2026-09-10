@@ -132,6 +132,12 @@ public sealed class ReplayDevCenterHandler(ReplayStore store) : IDevCenterHandle
     public Task<DevCenterResponse<ShippingLabel>> NewShippingLabel(
         string productId, string submissionId, NewShippingLabel shippingLabelInfo)
     {
+        if (store.FindSubmission(productId, submissionId) == null)
+        {
+            return Task.FromResult(ReplayStore.NotFound<ShippingLabel>(
+                $"Submission {productId}/{submissionId} not found."));
+        }
+
         ReplayShippingLabel label = new()
         {
             Id = store.NextId(),

@@ -14,7 +14,7 @@ namespace SurfaceDevCenterManager.Cli;
 internal static class ServiceCollectionExtensions
 {
     public static IServiceCollection AddSdcmServices(
-        this IServiceCollection services, OutputFormat outputFormat, string? replayPath = null)
+        this IServiceCollection services, OutputFormat outputFormat, ReplayStore? replayStore = null)
     {
         services.AddSingleton(new ConsoleOutputWriter(outputFormat));
         services.AddSingleton<IOutputWriter>(sp => sp.GetRequiredService<ConsoleOutputWriter>());
@@ -23,13 +23,12 @@ internal static class ServiceCollectionExtensions
         services.AddSingleton<ICredentialsProvider, CredentialsProvider>();
         services.AddSingleton<IAadTokenProvider, MsalAadTokenProvider>();
 
-        if (!string.IsNullOrWhiteSpace(replayPath))
+        if (replayStore != null)
         {
-            ReplayStore store = ReplayStore.Load(replayPath);
-            services.AddSingleton(store);
-            services.AddSingleton<IBlobTransfer>(store);
-            services.AddSingleton<IErrorReportFetcher>(store);
-            services.AddSingleton<IDevCenterHandlerFactory>(store);
+            services.AddSingleton(replayStore);
+            services.AddSingleton<IBlobTransfer>(replayStore);
+            services.AddSingleton<IErrorReportFetcher>(replayStore);
+            services.AddSingleton<IDevCenterHandlerFactory>(replayStore);
         }
         else
         {

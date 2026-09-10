@@ -102,7 +102,12 @@ case "$progress" in
     sdcm submission wait --product-id "$productId" --submission-id "$submissionId" --wait-timeout 3600 --auth client-secret
     ;&
   completed)
-    sdcm submission download --product-id "$productId" --submission-id "$submissionId" --output-file signed.zip --overwrite --auth client-secret
+    status=$(sdcm submission status --product-id "$productId" --submission-id "$submissionId" --output json --auth client-secret)
+    if [ "$(echo "$status" | jq -r .hasSignedPackage)" = "true" ]; then
+      sdcm submission download --product-id "$productId" --submission-id "$submissionId" --output-file signed.zip --overwrite --auth client-secret
+    else
+      echo "Ingestion finished (finalizeIngestion completed) with no signedPackage; nothing to download."
+    fi
     ;;
   failed)
     echo "submission failed; see errorReportContent" >&2

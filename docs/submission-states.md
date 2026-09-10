@@ -99,8 +99,8 @@ Common types:
 |------------|------|
 | `failed` | `commitFailed` or `state == failed` |
 | `completed` | `signedPackage` present, or `finalizeIngestion` + `completed` |
-| `created` | `commitPending` (or missing) and the workflow has not started |
-| `processing` | everything else, including `completed` on an intermediate step |
+| `created` | `commitStatus` is `commitPending` and the workflow has not started |
+| `processing` | everything else, including a missing `commitStatus` and `completed` on an intermediate step |
 
 On failure, `--output json` includes `errorReportContent` (the blob behind
 `workflowStatus.errorReport`), not just the URL.

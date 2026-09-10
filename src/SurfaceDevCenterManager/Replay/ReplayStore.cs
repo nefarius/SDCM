@@ -74,6 +74,7 @@ public sealed class ReplayStore : IDevCenterHandlerFactory, IBlobTransfer, IErro
             }
         }
 
+        store.AdvanceNextIdPastLoaded();
         return store;
     }
 
@@ -81,7 +82,31 @@ public sealed class ReplayStore : IDevCenterHandlerFactory, IBlobTransfer, IErro
     {
         lock (_gate)
         {
+            AdvanceNextIdPastLoadedUnlocked();
             return Interlocked.Increment(ref _nextId).ToString();
+        }
+    }
+
+    private void AdvanceNextIdPastLoaded()
+    {
+        lock (_gate)
+        {
+            AdvanceNextIdPastLoadedUnlocked();
+        }
+    }
+
+    private void AdvanceNextIdPastLoadedUnlocked()
+    {
+        foreach (string? id in Products.Select(p => p.Id)
+                     .Concat(Submissions.Select(s => s.Id))
+                     .Concat(ShippingLabels.Select(l => l.Id))
+                     .Concat(Preprod.Select(p => p.Id))
+                     .Concat(Preprod.SelectMany(p => p.Assets.Select(a => a.Id))))
+        {
+            if (long.TryParse(id, out long numeric) && numeric > _nextId)
+            {
+                _nextId = numeric;
+            }
         }
     }
 
@@ -220,13 +245,19 @@ public sealed class ReplayStore : IDevCenterHandlerFactory, IBlobTransfer, IErro
             {
                 string key = $"{productId}/{submissionId}";
                 int index = _pollIndex.GetValueOrDefault(key);
-                ReplaySubmissionPoll poll = live.Polls[Math.Min(index, live.Polls.Count - 1)];
+                int applyThrough = Math.Min(index, live.Polls.Count - 1);
+                ReplaySubmission snapshot = Clone(live);
+                for (int i = 0; i <= applyThrough; i++)
+                {
+                    ApplyPoll(snapshot, live.Polls[i]);
+                }
+
                 if (index < live.Polls.Count - 1)
                 {
                     _pollIndex[key] = index + 1;
                 }
 
-                return ApplyPoll(Clone(live), poll);
+                return snapshot;
             }
 
             return Clone(live);

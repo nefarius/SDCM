@@ -96,7 +96,12 @@ function Get-SelectedProductTypes {
 
 function Get-SubmissionProgress {
   param([string] $HardwareProductId, [string] $HardwareSubmissionId)
-  $raw = Invoke-Sdcm submission status --product-id $HardwareProductId --submission-id $HardwareSubmissionId
+  $raw = & sdcm --output json submission status --product-id $HardwareProductId --submission-id $HardwareSubmissionId
+  $exitCode = $LASTEXITCODE
+  if (-not $raw) {
+    [Console]::Error.WriteLine("sdcm submission status failed with exit code $exitCode")
+    exit $(if ($exitCode -ne 0) { $exitCode } else { 1 })
+  }
   return $raw | ConvertFrom-Json
 }
 
@@ -165,8 +170,13 @@ if ($status.progress -eq 'created') {
 
 if ($status.progress -eq 'processing') {
   Write-Output "> Wait for Submission to complete"
-  Invoke-Sdcm submission wait --product-id $SdcmProductId --submission-id $SdcmSubmissionId --wait-timeout $WaitTimeoutSeconds
+  & sdcm --output json submission wait --product-id $SdcmProductId --submission-id $SdcmSubmissionId --wait-timeout $WaitTimeoutSeconds
+  $waitExit = $LASTEXITCODE
   $status = Get-SubmissionProgress -HardwareProductId $SdcmProductId -HardwareSubmissionId $SdcmSubmissionId
+  if ($status.progress -ne 'failed' -and $waitExit -ne 0) {
+    [Console]::Error.WriteLine("sdcm submission wait failed with exit code $waitExit")
+    exit $waitExit
+  }
 }
 
 if ($status.progress -eq 'failed') {

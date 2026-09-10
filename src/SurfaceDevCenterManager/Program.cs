@@ -11,9 +11,11 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Console;
 using Microsoft.Extensions.Options;
+using System.Text.Json;
 using SurfaceDevCenterManager;
 using SurfaceDevCenterManager.Cli;
 using SurfaceDevCenterManager.Configuration;
+using SurfaceDevCenterManager.Replay;
 using SurfaceDevCenterManager.Services;
 
 // See the "Architecture" section of the modernization plan: the command tree (with every leaf's
@@ -42,10 +44,29 @@ if (string.IsNullOrWhiteSpace(replayPath))
     replayPath = Environment.GetEnvironmentVariable("SDCM_REPLAY");
 }
 
-if (!string.IsNullOrWhiteSpace(replayPath) && !File.Exists(replayPath))
+ReplayStore? replayStore = null;
+if (!string.IsNullOrWhiteSpace(replayPath))
 {
-    await Console.Error.WriteLineAsync($"Replay fixture not found: {replayPath}");
-    return (int)ExitCode.IoError;
+    if (!File.Exists(replayPath))
+    {
+        await Console.Error.WriteLineAsync($"Replay fixture not found: {replayPath}");
+        return (int)ExitCode.IoError;
+    }
+
+    try
+    {
+        replayStore = ReplayStore.Load(replayPath);
+    }
+    catch (JsonException ex)
+    {
+        await Console.Error.WriteLineAsync($"Replay fixture '{replayPath}' is not valid JSON: {ex.Message}");
+        return (int)ExitCode.InvalidArguments;
+    }
+    catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException)
+    {
+        await Console.Error.WriteLineAsync($"Replay fixture '{replayPath}' could not be loaded: {ex.Message}");
+        return (int)ExitCode.IoError;
+    }
 }
 
 string? authConfigPath = ConfigPathResolver.Resolve(explicitConfigPath);
@@ -75,7 +96,7 @@ builder.Logging.AddFilter(null, verbose ? LogLevel.Debug : LogLevel.Warning);
 
 builder.Services.Configure<DevCenterAppOptions>(builder.Configuration.GetSection(DevCenterAppOptions.SectionName));
 builder.Services.Configure<AuthConfigEntry>(builder.Configuration);
-builder.Services.AddSdcmServices(outputFormat, replayPath);
+builder.Services.AddSdcmServices(outputFormat, replayStore);
 
 using IHost host = builder.Build();
 accessor.Provider = host.Services;

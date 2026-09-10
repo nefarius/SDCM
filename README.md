@@ -78,7 +78,7 @@ sdcm
 │  └─ get                 --product-id <id>
 ├─ submission
 │  ├─ create              --product-id --input <file>
-│  ├─ list                --product-id [--submission-id]   (id form deprecated)
+│  ├─ list                --product-id <id> [--submission-id <id>]   (id form deprecated)
 │  ├─ get                 --product-id --submission-id
 │  ├─ status              --product-id --submission-id
 │  ├─ commit              --product-id --submission-id     (idempotent)

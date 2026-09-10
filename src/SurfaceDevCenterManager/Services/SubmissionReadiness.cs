@@ -70,7 +70,7 @@ internal static class SubmissionReadiness
     {
         if (IsFailed(submission))
         {
-            return !waitMetadata || HasDriverMetadata(submission);
+            return true;
         }
 
         return IsReady(submission) && (!waitMetadata || HasDriverMetadata(submission));
@@ -88,8 +88,7 @@ internal static class SubmissionReadiness
             return ProgressCompleted;
         }
 
-        if (CommitStatuses.IsPending(submission?.CommitStatus) ||
-            string.IsNullOrEmpty(submission?.CommitStatus))
+        if (CommitStatuses.IsPending(submission?.CommitStatus))
         {
             WorkflowStatus? status = submission?.WorkflowStatus;
             if (status != null &&

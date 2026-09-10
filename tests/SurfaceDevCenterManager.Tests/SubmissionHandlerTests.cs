@@ -89,6 +89,19 @@ public class SubmissionHandlerTests
     }
 
     [Fact]
+    public async Task Wait_FailedDoesNotWaitForMetadata()
+    {
+        ReplayStore store = HandlerTestSupport.StoreWith(
+            HandlerTestSupport.Replay("commitFailed", "failed", "validation"));
+        RecordingOutputWriter output = new();
+
+        ExitCode exit = await Wait(store, output, waitMetadata: true, waitTimeoutSeconds: 1);
+
+        Assert.Equal(ExitCode.WorkflowFailed, exit);
+        Assert.NotEmpty(output.Models);
+    }
+
+    [Fact]
     public async Task Wait_PollsThroughIntermediateCompleted()
     {
         ReplaySubmission submission = HandlerTestSupport.Replay("commitComplete", "completed", "scanning");
@@ -310,11 +323,15 @@ public class SubmissionHandlerTests
     }
 
     private static Task<ExitCode> Wait(
-        ReplayStore store, RecordingOutputWriter output, uint pollIntervalSeconds = 1, uint? waitTimeoutSeconds = 5)
+        ReplayStore store,
+        RecordingOutputWriter output,
+        uint pollIntervalSeconds = 1,
+        uint? waitTimeoutSeconds = 5,
+        bool waitMetadata = false)
     {
         SubmissionWaitHandler handler = new(store, output, HandlerTestSupport.Errors(output), store);
         return handler.RunAsync(
-            new SubmissionWaitInput("1", "2", false, pollIntervalSeconds, waitTimeoutSeconds, HandlerTestSupport.Global),
+            new SubmissionWaitInput("1", "2", waitMetadata, pollIntervalSeconds, waitTimeoutSeconds, HandlerTestSupport.Global),
             CancellationToken.None);
     }
 

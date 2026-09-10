@@ -71,10 +71,21 @@ public class SubmissionReadinessTests
     [InlineData("commitComplete", "started", "signing", new[] { "signedPackage" }, "completed")]
     [InlineData("commitFailed", "failed", "scanning", new string[0], "failed")]
     [InlineData("commitComplete", "failed", "signing", new string[0], "failed")]
+    [InlineData("", "notStarted", "packageInfoValidation", new string[0], "processing")]
     public void Progress_UsesDownloadsAndStepNotStateAlone(
         string commit, string state, string step, string[] downloads, string expected)
     {
-        Submission submission = HandlerTestSupport.Submission(commit, state, step, downloads);
+        Submission submission = HandlerTestSupport.Submission(
+            string.IsNullOrEmpty(commit) ? null : commit, state, step, downloads);
         Assert.Equal(expected, SubmissionReadiness.ToProgress(submission));
+    }
+
+    [Fact]
+    public void WaitDone_FailedStopsImmediatelyEvenWhenWaitMetadata()
+    {
+        Submission submission = HandlerTestSupport.Submission("commitFailed", "failed", "scanning");
+
+        Assert.True(SubmissionReadiness.IsWaitDone(submission, waitMetadata: true));
+        Assert.False(SubmissionReadiness.HasDriverMetadata(submission));
     }
 }
