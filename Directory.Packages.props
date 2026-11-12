@@ -16,7 +16,7 @@
     <PackageVersion Include="System.CommandLine" Version="2.0.14" />
 
     <!-- Hosting / DI / configuration -->
-    <PackageVersion Include="Microsoft.Extensions.Hosting" Version="10.0.13" />
+    <PackageVersion Include="Microsoft.Extensions.Hosting" Version="11.0.0" />
 
     <!-- Authentication -->
     <PackageVersion Include="Microsoft.Identity.Client" Version="4.92.0" />
